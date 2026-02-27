@@ -1,0 +1,60 @@
+<div class="container">
+    <div class="header">
+        <img src="{{ asset('images/gradelytics-logo.png') }}" alt="gradelytics" width="180">
+        <h2 style="color: white; margin-top: 20px;">New Support Ticket</h2>
+    </div>
+
+    <div class="content">
+        <p><strong>User:</strong> {{ $user->name }} ({{ $user->email }})</p>
+        <p><strong>Ticket ID:</strong> #{{ $ticket->ticketId }}</p>
+        <p><strong>Subject:</strong> {{ $ticket->subject }}</p>
+
+        <div class="highlight">
+            <p><strong>Message:</strong></p>
+            <p>{{ nl2br(e($ticket->message)) }}</p>
+        </div>
+
+        <a href="https://admin.gradelytics.app/support/tickets/{{ $ticket->ticketId }}" class="btn">View in Admin Panel</a>
+    </div>
+</div>
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>New Support Ticket</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f8fafc; margin: 0; padding: 0; }
+        .container { max-width: 600px; margin: 40px auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
+        .header { background: #1F6F43; padding: 30px; text-align: center; }
+        .content { padding: 40px; color: #333; }
+        .footer { background: #f1f5f9; padding: 30px; text-align: center; font-size: 14px; color: #64748b; }
+        .btn { display: inline-block; padding: 14px 28px; background: #1F6F43; color: white; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }
+        .highlight { background: #f0f9ff; padding: 20px; border-left: 4px solid #1F6F43; border-radius: 6px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="https://app.gradelytics.app/images/logo/logo-dark.png" alt="gradelytics" width="180">
+        </div>
+
+        <div class="content">
+            <h1 style="color: #1F6F43;">New Support Ticket</h1>
+          <p><strong>User:</strong> {{ $user->name }} ({{ $user->email }})</p>
+        <p><strong>Ticket ID:</strong> #{{ $ticket->ticketId }}</p>
+        <p><strong>Subject:</strong> {{ $ticket->subject }}</p>
+            <div class="highlight">
+                 <p><strong>Message:</strong></p>
+            <p>{{ nl2br(e($ticket->message)) }}</p>
+                </div>
+
+                   </div>
+
+        <div class="footer">
+            <p>&copy; {{ date('Y') }} gradelytics. All rights reserved.</p>
+            {{-- <p>Made with love for businesses in Africa and beyond.</p> --}}
+        </div>
+    </div>
+</body>
+</html>
