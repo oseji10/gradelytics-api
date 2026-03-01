@@ -6,6 +6,7 @@ use App\Models\Customer;
 use Illuminate\Http\Request;
 use App\Models\Role;
 use App\Models\StudentParent;
+use App\Models\Student;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -32,6 +33,22 @@ public function getSchoolParents(Request $request)
 
     }
 
+public function getParentChildren(Request $request, $parentId)
+{
+    $schoolId = $request->header('X-School-ID');
+
+    $children = Student::where('schoolId', $schoolId)
+        ->whereHas('parents', function ($q) use ($parentId) {
+            $q->where('student_parents.parentId', $parentId);
+        })
+        ->with(['user', 'classes', 'club', 'house'])
+        ->get();
+
+    return response()->json([
+        'childrenCount' => $children->count(),
+        'children' => $children
+    ]);
+}
 
 
 public function storeSchoolParent(Request $request)

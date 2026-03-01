@@ -16,6 +16,7 @@ return new class extends Migration
             $table->unsignedBigInteger('schoolId')->nullable();
             $table->unsignedBigInteger('userId')->nullable();
             $table->string('qualification')->nullable();
+            $table->string('signature')->nullable();
             $table->timestamps();
             $table->softDeletes();
 

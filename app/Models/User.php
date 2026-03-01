@@ -143,10 +143,7 @@ public function activeSchool()
     return $this->currently_active_school()->first();
 }
 
-public function invoices()
-    {
-        return $this->hasMany(Invoice::class, 'createdBy', 'id'); // Or direct if invoices belong to users
-    }
+
 
     public function schools()
 {
@@ -222,5 +219,10 @@ public function subscriptions()
             ->where('status', 'active')
             ->latest();
     }
+
+    public function teacher()
+{
+    return $this->hasOne(Teacher::class, 'userId', 'id');
+}
 
 }

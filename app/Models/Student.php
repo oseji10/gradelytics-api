@@ -16,7 +16,13 @@ class Student extends Model
         'schoolId',
         'gender',
         'dateOfBirth',
-        'bloodGroup'
+        'bloodGroup',
+        'passport',
+        'clubId',
+        'houseId',
+        'parentId',
+        'admissionNumber',
+        'schoolAssignedAdmissionNumber'
     ];
 
 
@@ -28,6 +34,11 @@ class Student extends Model
     public function user()
     {
         return $this->belongsTo(User::class, 'userId', 'id');
+    }
+
+    public function student_class()
+    {
+        return $this->belongsTo(SchoolClass::class, 'classId', 'classId');
     }
 
 public function parents()
@@ -52,4 +63,13 @@ public function classes()
     )->withPivot('schoolId');
 }
 
+public function club()
+    {
+        return $this->belongsTo(Club::class, 'clubId', 'clubId');
+    }
+
+    public function house()
+    {
+        return $this->belongsTo(House::class, 'houseId', 'houseId');
+    }
 }

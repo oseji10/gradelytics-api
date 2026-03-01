@@ -19,7 +19,8 @@ class StudentAttendance extends Model
         'termId',
         'academicYearId',
         'attendanceStatus',
-        'status'
+        'status',
+        'notes'
     ];
 
 

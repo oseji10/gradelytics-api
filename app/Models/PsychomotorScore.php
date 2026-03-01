@@ -23,6 +23,11 @@ class PsychomotorScore extends Model
         return $this->belongsTo(PsychomotorDomain::class, 'domainId');
     }
 
+     public function type()
+    {
+        return $this->belongsTo(PsychomotorDomain::class, 'domainId');
+    }
+
     public function student()
     {
         return $this->belongsTo(Student::class, 'studentId');

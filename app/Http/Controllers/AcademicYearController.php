@@ -26,7 +26,7 @@ class AcademicYearController extends Controller
         $schoolId = $request->header('X-School-ID');
 
         $validated = $request->validate([
-            'name' => 'required|string|max:20',
+            'academicYearName' => 'required|string|max:20',
             'startDate' => 'required|date',
             'endDate' => 'required|date|after:startDate',
         ]);
@@ -36,7 +36,7 @@ class AcademicYearController extends Controller
 
         $year = AcademicYear::create([
             'schoolId' => $schoolId,
-            'academicYearName' => $validated['name'],
+            'academicYearName' => $validated['academicYearName'],
             'startDate' => $startDate,
             'endDate' => $endDate,
             'isActive' => false,

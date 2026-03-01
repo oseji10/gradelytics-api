@@ -17,6 +17,7 @@ class AffectiveDomain extends Model
     'schoolId',
     'termId',
     'academicYearId',
+    'remarks'
     // 'classId',
     ];
 

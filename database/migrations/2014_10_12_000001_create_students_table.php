@@ -21,6 +21,7 @@ return new class extends Migration
             $table->enum('gender', ['male', 'female'])->nullable();
             $table->date('dateOfBirth')->nullable();
             $table->unsignedBigInteger('parentId')->nullable();
+            $table->string('passport')->nullable();
             $table->timestamps();
             $table->softDeletes();
             

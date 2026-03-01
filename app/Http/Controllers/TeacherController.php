@@ -12,6 +12,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
+use Illuminate\Http\JsonResponse;
+use App\Models\SchoolClass;
+
 use Illuminate\Support\Facades\Mail;
 
 class TeacherController extends Controller
@@ -141,6 +144,9 @@ public function updateClass(Request $request, $classId)
         'class' => $class,
     ]);
 }
+
+
+
 
 }
 

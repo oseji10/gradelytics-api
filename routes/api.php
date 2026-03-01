@@ -5,7 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\PsychomotorController;
 use App\Http\Controllers\AttendanceController;
-use App\Http\Controllers\EquipmentController;
+use App\Http\Controllers\ResultController;
 use App\Http\Controllers\StateController;
 use App\Http\Controllers\TermsController;
 use App\Http\Controllers\AcademicYearController;
@@ -18,7 +18,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\SuggestedFollowersController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\StockController;
-use App\Http\Controllers\ProductRequestController;
+// use App\Http\Controllers\GradingSystem;
 use App\Http\Controllers\TransactionsController;
 use App\Http\Controllers\ProjectsController;
 use App\Http\Controllers\AssessmentController;
@@ -68,44 +68,44 @@ use App\Http\Controllers\AdminDashboardController;
 */
 
 // Public routes
-Route::post('/resend-otp', [OtpController::class, 'resendOtp']);
-Route::post('/verify-otp', [OtpController::class, 'verifyOtp']);
-Route::post('/setup-password', [AuthController::class, 'setupPassword']);
+        Route::post('/resend-otp', [OtpController::class, 'resendOtp']);
+        Route::post('/verify-otp', [OtpController::class, 'verifyOtp']);
+        Route::post('/setup-password', [AuthController::class, 'setupPassword']);
 
-Route::post('/signup', [AuthController::class, 'signup2']);
-Route::post('/signin', [AuthController::class, 'signin']);
-Route::post('/signin-check', [AuthController::class, 'signin']);
-Route::post('/logout', [AuthController::class, 'logout']);
-Route::post('/refresh', [AuthController::class, 'refresh']);
-Route::get('/users/profile', [AuthController::class, 'profile'])->middleware('auth.jwt');
-Route::get('/roles', [RolesController::class, 'index']);
-Route::post('/forgot-password', [ForgotPasswordController::class, 'sendResetLink']);
-Route::post('/reset-password', [ResetPasswordController::class, 'reset'])->name('api.password.reset');
+        Route::post('/signup', [AuthController::class, 'signup2']);
+        Route::post('/signin', [AuthController::class, 'signin']);
+        Route::post('/signin-check', [AuthController::class, 'signin']);
+        Route::post('/logout', [AuthController::class, 'logout']);
+        Route::post('/refresh', [AuthController::class, 'refresh']);
+        Route::get('/users/profile', [AuthController::class, 'profile'])->middleware('auth.jwt');
+        Route::get('/roles', [RolesController::class, 'index']);
+        Route::post('/forgot-password', [ForgotPasswordController::class, 'sendResetLink']);
+        Route::post('/reset-password', [ResetPasswordController::class, 'reset'])->name('api.password.reset');
 
-Route::get('/currencies', function(){
-    $currencies = Currency::orderBy('currencyId')->get()->makeHidden([ 'created_at', 'updated_at', 'deleted_at']);
-    return response()->json($currencies);
-});
+        Route::get('/currencies', function(){
+            $currencies = Currency::orderBy('currencyId')->get()->makeHidden([ 'created_at', 'updated_at', 'deleted_at']);
+            return response()->json($currencies);
+        });
 
-Route::get('/payment-gateways', function(){
-    $gateways = PaymentGateway::orderBy('gatewayId')->get()->makeHidden([ 'created_at', 'updated_at', 'deleted_at']);
-    return response()->json($gateways);
-});
+        Route::get('/payment-gateways', function(){
+            $gateways = PaymentGateway::orderBy('gatewayId')->get()->makeHidden([ 'created_at', 'updated_at', 'deleted_at']);
+            return response()->json($gateways);
+        });
 
-Route::get('/subscription-plans', function(){
-    $plans = Plans::with('currency_detail')->orderBy('planId')->get()->makeHidden([ 'created_at', 'updated_at', 'deleted_at']);
-    return response()->json($plans);
-});
+        Route::get('/subscription-plans', function(){
+            $plans = Plans::with('currency_detail')->orderBy('planId')->get()->makeHidden([ 'created_at', 'updated_at', 'deleted_at']);
+            return response()->json($plans);
+        });
 
-Route::get('/invoices/admin-summary', [InvoiceController::class, 'adminInvoiceSummary']);
-Route::get('/admin/invoice-status-breakdown', [InvoiceController::class, 'invoiceStatusBreakdown']);
-Route::get('/admin/top-schools', [InvoiceController::class, 'topSchools']);
-Route::get('/admin/revenue-trends', [InvoiceController::class, 'revenueTrends']);
-Route::get('/admin/payment-method-breakdown', [InvoiceController::class, 'paymentMethodBreakdown']);
-Route::get('/admin/overdue-invoices-summary', [InvoiceController::class, 'overdueInvoicesSummary']);
-Route::get('/admin/currency-distribution', [InvoiceController::class, 'currencyDistribution']);
+        Route::get('/invoices/admin-summary', [InvoiceController::class, 'adminInvoiceSummary']);
+        Route::get('/admin/invoice-status-breakdown', [InvoiceController::class, 'invoiceStatusBreakdown']);
+        Route::get('/admin/top-schools', [InvoiceController::class, 'topSchools']);
+        Route::get('/admin/revenue-trends', [InvoiceController::class, 'revenueTrends']);
+        Route::get('/admin/payment-method-breakdown', [InvoiceController::class, 'paymentMethodBreakdown']);
+        Route::get('/admin/overdue-invoices-summary', [InvoiceController::class, 'overdueInvoicesSummary']);
+        Route::get('/admin/currency-distribution', [InvoiceController::class, 'currencyDistribution']);
 
-Route::get('/users', [UsersController::class, 'index']);
+    Route::get('/users', [UsersController::class, 'index']);
 Route::middleware(['auth.jwt', 'school'])->group(function () {
 
     Route::get('/user', function () {
@@ -129,16 +129,16 @@ Route::middleware(['auth.jwt', 'school'])->group(function () {
                 'schoolId' => $school->schoolId ?? '',
                 'user_plan' => $user->current_plan->planName ?? "",
                 // $schools,
-            ]
-        ]);
-    });
+                ]
+                ]);
+            });
 
-// Route::get('/plans', function(){
-//     $plans = Plans::orderBy('planId')->with('currency_detail', 'isSubscribed')->get();
-//     return response()->json($plans);
-// });
+        // Route::get('/plans', function(){
+        //     $plans = Plans::orderBy('planId')->with('currency_detail', 'isSubscribed')->get();
+        //     return response()->json($plans);
+        // });
 
-Route::get('/plans', function () {
+    Route::get('/plans', function () {
     $user = auth()->user();
 
     $plans = Plans::orderBy('planId')
@@ -186,7 +186,7 @@ Route::get('/plans', function () {
         return response()->json(['message' => 'Currency updated successfully']);
     });
 
-    Route::post('/payment-gateways', function () {
+        Route::post('/payment-gateways', function () {
         $validatedData = request()->validate([
             'paymentGatewayName' => 'required|string|max:255',
             'url' => 'nullable|string',
@@ -195,9 +195,9 @@ Route::get('/plans', function () {
         $gateway = PaymentGateway::create($validatedData);
     
         return response()->json(['message' => 'Payment gateway created successfully', 'gateway' => $gateway], 201);
-    }); 
+        }); 
 
-    Route::patch('/payment-gateways/{gatewayId}', function ($gatewayId) {
+        Route::patch('/payment-gateways/{gatewayId}', function ($gatewayId) {
         
         $validatedData = request()->validate([
             'paymentGatewayName' => 'sometimes|string|max:255',
@@ -205,37 +205,24 @@ Route::get('/plans', function () {
         ]);
         PaymentGateway::where('gatewayId', $gatewayId)->update($validatedData);
         return response()->json(['message' => 'Payment gateway updated successfully']);
-    });
-  
-    Route::get('profile', [UsersController::class, 'userProfile']);
-    Route::patch('/profile', [UsersController::class, 'updateUser']);
-    Route::patch('/profile/password', [UsersController::class, 'updatePassword']);
-
+        });
+    
+        Route::prefix('profile')->group(function () {
+        Route::get('/', [UsersController::class, 'userProfile']);
+        Route::patch('/', [UsersController::class, 'updateUser']);
+        Route::post('/signature', [UsersController::class, 'updateSignature']);
+        Route::patch('/password', [UsersController::class, 'updatePassword']);
+        Route::post('/upload-image', [UsersController::class, 'uploadProfileImage']);
+        Route::post('/upload-cover-image', [UsersController::class, 'uploadCoverImage']);
+        
+        });
     Route::put('/schools/{schoolId}', [SchoolsController::class, 'update']);
     Route::patch('/schools/{schoolId}/status', [SchoolsController::class, 'toggleSchoolStatus']);
 
     Route::patch('/schools/{schoolId}/set-default', [SchoolsController::class, 'setDefaultSchool']);
 
-    // User profile routes
-    Route::get('profile/biodata', [UsersController::class, 'userBiodataProfile']);
-    Route::get('profile/education', [UsersController::class, 'userEducationProfile']);
-    Route::get('profile/experience', [UsersController::class, 'userExperienceProfile']);
-    Route::get('profile/skills', [UsersController::class, 'userSkillsProfile']);
-    Route::get('profile/drivers-license', [UsersController::class, 'userDriversLicenseProfile']);
 
-    Route::post('profile/biodata', [UsersController::class, 'storeUserBiodata']);
-    Route::post('profile/education', [UsersController::class, 'storeUserEducation']);
-    Route::post('profile/experience', [UsersController::class, 'storeUserExperience']);
-    Route::post('profile/skills', [UsersController::class, 'storeUserSkills']);
-    Route::post('profile/drivers-license', [UsersController::class, 'storeUserDriversLicense']);
-
-    Route::delete('profile/education/{id}', [UsersController::class, 'deleteUserEducation']);
-    Route::delete('profile/experience/{id}', [UsersController::class, 'deleteUserExperience']);
-    Route::delete('profile/skills/{id}', [UsersController::class, 'deleteUserSkills']);
-    Route::delete('profile/drivers-license/{id}', [UsersController::class, 'deleteUserDriversLicense']);
-
-    Route::post('profile/upload-image', [UsersController::class, 'uploadProfileImage']);
-    Route::post('profile/upload-cover-image', [UsersController::class, 'uploadCoverImage']);
+   
 
     // Schools
     Route::get('schools', [SchoolsController::class, 'index']);
@@ -243,6 +230,7 @@ Route::get('/plans', function () {
     Route::get('schools/user-schools', [SchoolsController::class, 'mySchools']);
     // Route::post('/schools/{schoolId}', [SchoolsController::class, 'update']);
    
+
     Route::get('classes/school', [ClassController::class, 'getSchoolClasses']);
     Route::get('classes/school/{classId}/students', [ClassController::class, 'getSchoolClassStudents']);
     Route::post('classes/school', [ClassController::class, 'storeSchoolClass']);
@@ -260,7 +248,7 @@ Route::get('/plans', function () {
 
     Route::get('school/students', [StudentController::class, 'getSchoolStudents']);
     Route::post('school/students', [StudentController::class, 'storeSchoolStudent']);
-    Route::patch('school/students/{studentId}', [StudentController::class, 'updateStudent']);
+    Route::put('school/students/{studentId}', [StudentController::class, 'updateStudent']);
     Route::delete('school/students/{studentId}', [StudentController::class, 'destroyStudent']);
 
 
@@ -273,12 +261,18 @@ Route::get('/plans', function () {
     Route::delete('school/subjects/{subjectId}', [SubjectController::class, 'destroySubject']);
 
     
-
-    Route::get('school/parents', [ParentController::class, 'getSchoolParents']);
-    Route::post('school/parents', [ParentController::class, 'storeSchoolParent']);
-    Route::patch('school/parents/{parentId}', [ParentController::class, 'updateParent']);
-    Route::patch('school/parents/{parentId}/assign-teachers', [ParentController::class, 'assignParent']);
-    Route::delete('school/parents/{parentId}', [ParentController::class, 'destroyParent']);
+    Route::prefix('school')->group(function () {
+    Route::get('/parents', [ParentController::class, 'getSchoolParents']);
+    Route::post('/parents', [ParentController::class, 'storeSchoolParent']);
+    Route::patch('/parents/{parentId}', [ParentController::class, 'updateParent']);
+    Route::patch('/parents/{parentId}/assign-teachers', [ParentController::class, 'assignParent']);
+    Route::delete('/parents/{parentId}', [ParentController::class, 'destroyParent']);
+    
+    Route::get('/clubs', [SchoolsController::class, 'getClubs']);
+    Route::post('/clubs', [SchoolsController::class, 'storeClub']);
+    Route::get('/houses', [SchoolsController::class, 'getHouses']);
+    Route::post('/houses', [SchoolsController::class, 'storeHouse']);
+    });
 
     Route::prefix('academic-years')->group(function () {
         Route::get('/', [AcademicYearController::class, 'index']);
@@ -314,7 +308,7 @@ Route::get('/plans', function () {
 
    
 
-Route::prefix('domains')->group(function () {
+    Route::prefix('domains')->group(function () {
     Route::get('/', [AffectiveController::class, 'domains']);
     Route::get('/affective', [AffectiveController::class, 'affectiveDomain']);
     Route::post('/save', [AffectiveController::class, 'saveDomain']);
@@ -325,9 +319,9 @@ Route::prefix('domains')->group(function () {
 
     Route::post('/scores', [AffectiveController::class, 'submitScores']);
     Route::get('/scores/student/{studentId}/{schoolId}', [AffectiveController::class, 'getStudentScores']);
-});
+    });
 
-Route::prefix('psychomotor')->group(function () {
+    Route::prefix('psychomotor')->group(function () {
     Route::get('/', [PsychomotorController::class, 'domains']);
     Route::get('/psychomotor', [PsychomotorController::class, 'psychomotorDomain']);
     Route::post('/save', [PsychomotorController::class, 'saveDomain']);
@@ -338,16 +332,23 @@ Route::prefix('psychomotor')->group(function () {
 
     Route::post('/scores', [PsychomotorController::class, 'submitScores']);
     Route::get('/scores/student/{studentId}/{schoolId}', [PsychomotorController::class, 'getStudentScores']);
-});
+    });
 
 
-Route::prefix('grading')->group(function () {
+    Route::prefix('grading')->group(function () {
     Route::get('/', [GradingController::class, 'index']);
     Route::post('/', [GradingController::class, 'store']);
     Route::put('/{gradingId}', [GradingController::class, 'update']);
     Route::delete('/{gradingId}', [GradingController::class, 'destroy']);
-});
+    });
 
+    Route::get('/results/student/{studentId}', [ResultController::class, 'getStudentResult']);
+    Route::get('/results/class-summary/{classId}', [ResultController::class, 'classResultSummary']);
+    Route::patch('/results/{studentId}/class-teacher-comment', [ResultController::class, 'classTeacherComment']);
+    Route::patch('/results/{studentId}/principal-comment', [ResultController::class, 'principalComment']);
+
+    Route::get('/parents/{parentId}/children', [ParentController::class, 'getParentChildren']);
+    
     Route::get('/subscribers', [SubscriptionController::class, 'index']);
     Route::get('/my-subscriptions', [SubscriptionController::class, 'mySubscriptions']);
 
@@ -360,7 +361,7 @@ Route::prefix('grading')->group(function () {
     Route::patch('/support/tickets/{ticketId}/status', [SupportController::class, 'updateTicketStatus']);
 
     Route::post('/subscribe/{planId}', [SubscriptionController::class, 'create']); // Add auth
-     Route::put('/subscriptions/{planId}/cancel', [SubscriptionController::class, 'cancel']); // Add auth
+    Route::put('/subscriptions/{planId}/cancel', [SubscriptionController::class, 'cancel']); // Add auth
     Route::patch('/subscriptions/{subscriptionId}/activate', [SubscriptionController::class, 'activate']);
     Route::patch('/subscriptions/{subscriptionId}/deactivate', [SubscriptionController::class, 'deactivate']);
 
@@ -368,26 +369,26 @@ Route::prefix('grading')->group(function () {
 
     Route::post('/users/{id}/send-email', [UserEmailController::class, 'sendSingle']);
     Route::post('/users/broadcast-email', [UserEmailController::class, 'broadcast']);
-});
+    });
 
-Route::prefix('invoices')->group(function () {
+    Route::prefix('invoices')->group(function () {
     Route::get('/{id}/pdf', [InvoicePdfController::class, 'download']);
     Route::get('/{id}/stream-pdf', [InvoicePdfController::class, 'stream']);
     Route::get('/{id}/generate-pdf', [InvoicePdfController::class, 'generate']);
     Route::post('/{id}/send-email', [InvoicePdfController::class, 'sendEmail']);
-});
+    });
 
-Route::prefix('receipts')->group(function () {
+    Route::prefix('receipts')->group(function () {
     Route::get('/{id}/pdf', [InvoicePdfController::class, 'downloadReceipt']);
     Route::get('/{id}/stream-pdf', [InvoicePdfController::class, 'stream']);
     Route::get('/{id}/generate-pdf', [InvoicePdfController::class, 'generate']);
     Route::post('/{id}/send-email', [InvoicePdfController::class, 'sendReceiptEmail']);
-});
+    });
 
-Route::post('/flutterwave/webhook', [WebhookController::class, 'handle']);
-Route::get('/subscription/verify-redirect', [SubscriptionController::class, 'verifyRedirect']);
+    Route::post('/flutterwave/webhook', [WebhookController::class, 'handle']);
+    Route::get('/subscription/verify-redirect', [SubscriptionController::class, 'verifyRedirect']);
 
-Route::middleware(['auth.jwt'])->group(function () {
+    Route::middleware(['auth.jwt'])->group(function () {
     Route::get('/admin/dashboard-counts', [AdminDashboardController::class, 'dashboardCounts']);
     Route::get('/admin/dashboard-details/users', [AdminDashboardController::class, 'usersDetails']);
     Route::get('/admin/dashboard-details/invoices', [AdminDashboardController::class, 'invoicesDetails']);

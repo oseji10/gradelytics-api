@@ -49,4 +49,9 @@ public function classes()
     )->withPivot('schoolId');
 }
 
+public function subject()
+    {
+        return $this->belongsTo(Subject::class, 'subjectId');
+    }
+
 }

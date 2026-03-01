@@ -14,7 +14,8 @@ class Teacher extends Model
         'teacherId',
         'qualification',
         'schoolId',
-        'userId'
+        'userId',
+        'signature'
     ];
 
 

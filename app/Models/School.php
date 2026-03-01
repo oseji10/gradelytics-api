@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class school extends Model
+class School extends Model
 {
     protected $table = 'schools';
 
@@ -22,7 +22,7 @@ class school extends Model
         'isDefault',
         'schoolAddress',
         'status',
-        'taxId'
+        'authorizedSignature'
     ];
 
     public function currency()

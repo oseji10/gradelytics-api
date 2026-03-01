@@ -97,6 +97,7 @@ class AttendanceController extends Controller
                 'attendanceDate' => $request->date,
                 'schoolId' => $schoolId,
                 'status' => $record['status'],
+                'notes' => $record['notes'] ?? null,
                 'teacherId' => auth()->id(),
                 'academicYearId' => $session->academicYearId,
                 'termId' => $term->termId,

@@ -24,8 +24,8 @@ Route::get('/posts/{filename}', function ($filename) {
     return response()->file($path);
 });
 
-Route::get('/tenant-logos/{filename}', function ($filename) {
-    $path = storage_path('app/public/tenant-logos/' . $filename);
+Route::get('/school-logos/{filename}', function ($filename) {
+    $path = storage_path('app/public/school-logos/' . $filename);
     if (!file_exists($path)) abort(404);
     return response()->file($path);
 });
@@ -36,14 +36,22 @@ Route::get('/signatures/{filename}', function ($filename) {
     return response()->file($path);
 });
 
+
+Route::get('/student-passport/{filename}', function ($filename) {
+    $path = storage_path('app/public/student-passport/' . $filename);
+    if (!file_exists($path)) abort(404);
+    return response()->file($path);
+});
+
+
 Route::get('/profile-images/{filename}', function ($filename) {
     $path = storage_path('app/public/profile-images/' . $filename);
     if (!file_exists($path)) abort(404);
     return response()->file($path);
 });
 
-Route::get('/cover-images/{filename}', function ($filename) {
-    $path = storage_path('app/public/cover-images/' . $filename);
+Route::get('/teacher-signatures/{filename}', function ($filename) {
+    $path = storage_path('app/public/teacher-signatures/' . $filename);
     if (!file_exists($path)) {
         abort(404);
     }

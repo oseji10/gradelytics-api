@@ -10,10 +10,17 @@ use App\Models\Student;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
-
+use App\Services\ResultService;
 
 class AssessmentController extends Controller
 {
+
+ protected $resultService;
+
+    public function __construct(ResultService $resultService)
+    {
+        $this->resultService = $resultService;
+    }
 
     public function index(Request $request){
         $schoolId = $request->header('X-School-ID');
@@ -88,32 +95,32 @@ class AssessmentController extends Controller
             ], 400);
         }
 
-        // ✅ Use actual score, not undefined variable
-        $gradeData = $this->calculateGrade(
-            $entry['score'],
-            $schoolId,
-            $session->academicYearId
-        );
-
-        $grade = $gradeData->grade ?? null;
-        $remark = $gradeData->remark ?? null;
+    
 
         AssessmentScore::updateOrCreate(
-            [
-                'assessmentId' => $assessmentId,
-                'studentId'    => $entry['studentId'],
-                'termId'       => $term->termId
-            ],
-            [
-                'score'          => $entry['score'],
-                'grade'          => $grade,
-                'remark'         => $remark,
-                'schoolId'       => $schoolId,
-                'subjectId'      => $validated['subjectId'],
-                'academicYearId' => $session->academicYearId,
-                'classId'        => $validated['classId'],
-            ]
-        );
+    [
+        'assessmentId'   => $assessmentId,
+        'studentId'      => $entry['studentId'],
+        'termId'         => $term->termId,
+        'subjectId'      => $validated['subjectId'],      // ✅ REQUIRED
+        'classId'        => $validated['classId'],        // ✅ REQUIRED
+        'academicYearId' => $session->academicYearId,     // ✅ REQUIRED
+        'schoolId'       => $schoolId                     // ✅ REQUIRED
+    ],
+    [
+        'score' => $entry['score'],
+    ]
+);
+
+
+        // 🔥 Immediately recompute final subject result
+$this->resultService->computeAndStoreResult(
+    $entry['studentId'],
+    $validated['classId'],
+    $validated['subjectId'],
+    $schoolId
+);
+
     }
 
     return response()->json([
@@ -162,6 +169,10 @@ class AssessmentController extends Controller
             'data' => $assessment
         ], 200);
     }
+
+
+
+
 
 
 public function getSubjectAssessmentScores(Request $request): JsonResponse

@@ -11,7 +11,7 @@ class PsychomotorDomain extends Model
 
     protected $primaryKey = 'domainId';
 
-    protected $fillable = ['domainName', 'maxScore', 'weight', 'schoolId'];
+    protected $fillable = ['domainName', 'maxScore', 'weight', 'schoolId', 'remarks'];
 
     public function scores()
     {

@@ -2,7 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Company;
+use App\Models\Club;
+use App\Models\House;
 use App\Models\School;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -20,6 +21,20 @@ class SchoolsController extends Controller
         return response()->json($schools);
     }
 
+    public function getClubs(Request $request)
+    {
+        $schoolId = $request->header('X-School-ID');
+        $clubs = Club::where('schoolId', $schoolId)->get();
+        return response()->json($clubs);
+    }
+
+    public function getHouses(Request $request)
+    {
+        $schoolId = $request->header('X-School-ID');
+        $houses = House::where('schoolId', $schoolId)->get();
+        return response()->json($houses);
+    }
+
 public function mySchools(Request $request)
     {
         // return $schoolId = $request->header('X-School-ID');
@@ -28,6 +43,36 @@ public function mySchools(Request $request)
         ->where('ownerId', auth()->id())
         ->get();
         return response()->json($schools);
+    }
+
+
+     public function storeClub(Request $request)
+{
+    $schoolId = $request->header('X-School-ID');
+
+    $validated = $request->validate([
+        'clubName' => 'required|string|max:255',
+    ]);
+
+    $club = Club::create([
+        'clubName' => $validated['clubName'], // map frontend name → db clubName
+        'schoolId' => $schoolId
+    ]);
+
+    return response()->json($club, 201);
+}
+
+      public function storeHouse(Request $request)
+    {
+        $schoolId = $request->header('X-School-ID');
+        $validated = $request->validate([
+            'houseName' => 'required|string|max:255',
+        ]);
+        $house = House::create([
+        'houseName' => $validated['houseName'], // map frontend name → db clubName
+        'schoolId' => $schoolId
+    ]);
+        return response()->json($house, 201); 
     }
 
     public function store(Request $request)
@@ -43,16 +88,16 @@ public function mySchools(Request $request)
         $validated = $request->validate([
             'schoolName' => 'required|string|max:255',
             'schoolAddress' => 'nullable|string',
-            'taxId' => 'nullable|string',
+            // 'taxId' => 'nullable|string',
             'schoolEmail' => 'required|email',
             'schoolPhone' => 'nullable|string',
             'schoolLogo' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
             'authorizedSignature' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
             // 'countryCode' => 'required|string',
-            'timezone' => 'required|string',
-            'gatewayPreference' => 'nullable|integer|exists:payment_gateways,gatewayId',
+            // 'timezone' => 'required|string',
+            // 'gatewayPreference' => 'nullable|integer|exists:payment_gateways,gatewayId',
             // 'companyStatus' => 'required|in:active,inactive',
-            'currency' => 'required|integer|exists:currencies,currencyId',
+            // 'currency' => 'required|integer|exists:currencies,currencyId',
         ]);
 
         // Handle logo upload
@@ -75,7 +120,7 @@ public function mySchools(Request $request)
         }
 
         $owner = auth()->id();
-        $validated['ownerId'] = $owner;
+        $validated['addedBy'] = $owner;
         $company = School::create($validated);
 
         // Return a response, typically JSON
@@ -158,8 +203,9 @@ public function mySchools(Request $request)
 
 
 
-public function update(Request $request, $schoolId)
+public function update(Request $request)
 {
+    $schoolId = $request->header('X-School-ID');
     // Handle method spoofing (for file uploads)
     if ($request->has('_method') && strtoupper($request->_method) === 'PUT') {
         // Laravel will now parse files correctly because it's treated as POST
@@ -169,20 +215,20 @@ public function update(Request $request, $schoolId)
         'schoolName' => 'required|string|max:255',
         'schoolEmail' => 'required|email|max:255',
         'schoolAddress' => 'nullable|string',
-        'taxId' => 'nullable|string',
+        // 'taxId' => 'nullable|string',
         'schoolPhone' => 'nullable|string|max:20',
          'schoolLogo' => 'sometimes|file|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
 'authorizedSignature' => 'sometimes|file|image|mimes:png,jpg,jpeg,svg|max:2048',
-'timezone' => 'required|string|max:100',
+// 'timezone' => 'required|string|max:100',
         // 'currency' => 'required|exists:currencies,currencyId',
-        'gatewayPreference' => 'required|exists:payment_gateways,gatewayId',
+        // 'gatewayPreference' => 'required|exists:payment_gateways,gatewayId',
         'status' => 'sometimes|in:active,inactive',
     ]);
 
     $user = auth()->user();
 
     $school = School::where('schoolId', $schoolId)
-        ->where('ownerId', $user->id)
+        // ->where('ownerId', $user->id)
         ->firstOrFail();
 
     $updateData = $validated;
@@ -205,7 +251,7 @@ public function update(Request $request, $schoolId)
     }
 
     $school->update($updateData);
-    $school->load('currency', 'payment_gateway');
+    // $school->load('currency', 'payment_gateway');
 
     return response()->json([
         'message' => 'Business updated successfully',

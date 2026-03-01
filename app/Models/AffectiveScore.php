@@ -28,6 +28,11 @@ class AffectiveScore extends Model
         return $this->belongsTo(AffectiveDomain::class, 'domainId');
     }
 
+    public function type()
+    {
+        return $this->belongsTo(AffectiveDomain::class, 'domainId');
+    }
+
     public function student()
     {
         return $this->belongsTo(Student::class, 'studentId');

@@ -19,10 +19,14 @@ use App\Models\CommunityLead;
 use App\Models\DriversLicense;
 use App\Models\Education;
 use App\Models\Skills;
-use App\Models\WorkExperience;
+use App\Models\ClassTeacher;
 use Illuminate\Queue\Worker;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rules\Password;
+
+
+use App\Models\SchoolClass;
+
 
 class UsersController extends Controller
 {
@@ -76,345 +80,7 @@ class UsersController extends Controller
         }, 5);
     }
 
-    public function userBiodataProfile(Request $request)
-    {
-        $user = auth()->user();
 
-        if (!$user) {
-            return response()->json(['message' => 'User not authenticated'], 401);
-        }
-
-        return response()->json([
-            'firstName' => $user->firstName,
-            'lastName' => $user->lastName,
-            'otherNames' => $user->otherNames,
-            'email' => $user->email,
-            'phoneNumber' => $user->phoneNumber,
-            'role' => $user->user_role->roleName ?? null,
-            'profileImage' => $user->profileImage ?? null,
-            'coverImage' => $user->coverImage ?? null,
-            'location' => $user->location,
-            'bio' => $user->bio,
-            'created_at' => $user->created_at,
-
-        ]);
-    }
-
-
- public function userEducationProfile(Request $request)
-{
-    $user = auth()->user();
-
-    if (!$user) {
-        return response()->json([
-            'message' => 'User not authenticated'
-        ], 401);
-    }
-
-    // Fetch ALL education records
-    $education = Education::where('userId', $user->id)->get();
-
-    // If empty, return safe empty array
-    if ($education->isEmpty()) {
-        return response()->json([
-            'message' => 'No education records found',
-            'education' => []
-        ], 200);
-    }
-
-    // Return all records
-    return response()->json([
-        'education' => $education
-    ], 200);
-}
-
-
-
-    public function userExperienceProfile(Request $request)
-{
-    $user = auth()->user();
-
-    if (!$user) {
-        return response()->json([
-            'message' => 'User not authenticated'
-        ], 401);
-    }
-
-    $workExperience = WorkExperience::where('userId', $user->id)->get();
-
-
-
-    // If found, return the actual fields
-    return response()->json([
-        'workExperience' => $workExperience
-    ], 200);
-}
-
-
-
-    public function userSkillsProfile(Request $request)
-{
-    $user = auth()->user();
-
-    if (!$user) {
-        return response()->json([
-            'message' => 'User not authenticated'
-        ], 401);
-    }
-
-    $skills = Skills::where('userId', $user->id)->get();
-
-
-
-     return response()->json([
-        'skills' => $skills
-    ], 200);
-}
-
-
-public function userDriversLicenseProfile(Request $request)
-{
-    $user = auth()->user();
-
-    if (!$user) {
-        return response()->json([
-            'message' => 'User not authenticated'
-        ], 401);
-    }
-
-    $driversLicense = DriversLicense::where('userId', $user->id)->first();
-
-
-
-     return response()->json([
-        'driversLicense' => $driversLicense
-    ], 200);
-}
-
-public function storeUserBiodata(Request $request)
-{
-    $user = auth()->user();
-
-    if (!$user) {
-        return response()->json(['message' => 'User not authenticated'], 401);
-    }
-
-    $validated = $request->validate([
-        'firstName' => 'nullable|string|max:255',
-        'lastName' => 'nullable|string|max:255',
-        'otherNames' => 'nullable|string|max:255',
-        'phoneNumber' => 'nullable|string|max:20',
-        'location' => 'nullable|string|max:255',
-        'bio' => 'nullable|string'
-    ]);
-
-    // Update user biodata
-    $user->update($validated);
-
-    return response()->json([
-        'message' => 'Biodata updated successfully',
-        'data' => $user
-    ]);
-}
-
-public function storeUserEducation(Request $request)
-{
-    $user = auth()->user();
-
-    if (!$user) {
-        return response()->json(['message' => 'User not authenticated'], 401);
-    }
-
-    $validated = $request->validate([
-        'institutionName' => 'nullable|string|max:255',
-        'degree' => 'nullable|string|max:255',
-        'fieldOfStudy' => 'nullable|string|max:255',
-        'startDate' => 'nullable|date',
-        'endDate' => 'nullable|date',
-        'description' => 'nullable|string'
-    ]);
-
-    // Force userId into the data
-    $validated['userId'] = $user->id;
-
-    // CREATE always — never update existing
-    $education = Education::create($validated);
-
-    return response()->json([
-        'message' => 'Education added successfully',
-        'data' => $education
-    ]);
-}
-
-
-public function deleteUserEducation(Request $request, $id)
-{
-    $user = auth()->user();
-
-    if (!$user) {
-        return response()->json(['message' => 'User not authenticated'], 401);
-    }
-
-    $education = Education::where('educationId', $id)
-        ->where('userId', $user->id)
-        ->first();
-
-    if (!$education) {
-        return response()->json(['message' => 'Education record not found'], 404);
-    }
-
-    $education->delete();
-
-    return response()->json(['message' => 'Education record deleted successfully']);
-}
-
-
-public function storeUserExperience(Request $request)
-{
-    $user = auth()->user();
-
-    if (!$user) {
-        return response()->json(['message' => 'User not authenticated'], 401);
-    }
-
-    $validated = $request->validate([
-        'companyName' => 'nullable|string|max:255',
-        'position' => 'nullable|string|max:255',
-        'location' => 'nullable|string|max:255',
-        'startDate' => 'nullable|date',
-        'endDate' => 'nullable|date',
-        'description' => 'nullable|string'
-    ]);
-
-     $validated['userId'] = $user->id;
-
-    // CREATE always — never update existing
-    $experience = WorkExperience::create($validated);
-
-    return response()->json([
-        'message' => 'Work experience saved successfully',
-        'data' => $experience
-    ]);
-}
-
-public function deleteUserExperience(Request $request, $id)
-{
-    $user = auth()->user();
-
-    if (!$user) {
-        return response()->json(['message' => 'User not authenticated'], 401);
-    }
-
-    $experience = WorkExperience::where('workExperienceId', $id)
-        ->where('userId', $user->id)
-        ->first();
-
-    if (!$experience) {
-        return response()->json(['message' => 'Work experience record not found'], 404);
-    }
-
-    $experience->delete();
-
-    return response()->json(['message' => 'Work experience record deleted successfully']);
-}
-
-
-public function storeUserSkills(Request $request)
-{
-    $user = auth()->user();
-
-    if (!$user) {
-        return response()->json(['message' => 'User not authenticated'], 401);
-    }
-
-    $validated = $request->validate([
-        'skillName'  => 'nullable|string|max:255',
-        'skillLevel' => 'nullable|string|max:100'
-    ]);
-
-      $validated['userId'] = $user->id;
-      $skills = Skills::create($validated);
-
-
-
-    return response()->json([
-        'message' => 'Skills saved successfully',
-        'data' => $skills
-    ]);
-}
-
-
-public function deleteUserSkills(Request $request, $id)
-{
-    $user = auth()->user();
-    if (!$user) {
-        return response()->json(['message' => 'User not authenticated'], 401);
-    }
-    $skills = Skills::where('skillId', $id)
-        ->where('userId', $user->id)
-        ->first();
-    if (!$skills) {
-        return response()->json(['message' => 'Skills record not found'], 404);
-    }
-    $skills->delete();
-    return response()->json(['message' => 'Skills record deleted successfully']);
-}
-
-
-public function storeUserDriversLicense(Request $request)
-{
-    $user = auth()->user();
-
-    if (!$user) {
-        return response()->json(['message' => 'User not authenticated'], 401);
-    }
-
-    $validated = $request->validate([
-        'licenseId' => 'nullable|string|max:255',
-        'issueDate' => 'nullable|date',
-        'expiryDate' => 'nullable|date',
-        'image' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',
-    ]);
-
-    // Handle uploaded image
-    if ($request->hasFile('image')) {
-        $image = $request->file('image');
-        $imageName = time() . '_' . $user->id . '.' . $image->getClientOriginalExtension();
-        $image->move(public_path('drivers-license'), $imageName);
-
-        // Add image path to validated array
-        $validated['image'] = 'drivers-license/' . $imageName;
-    }
-
-    // Store or update driver's license
-    $driversLicense = DriversLicense::updateOrCreate(
-        ['userId' => $user->id],
-        $validated
-    );
-
-    return response()->json([
-        'message' => "Driver's license saved successfully",
-        'data' => $driversLicense
-    ]);
-}
-
-
-
-public function deleteUserDriversLicense(Request $request, $id)
-{
-    $user = auth()->user();
-    if (!$user) {
-        return response()->json(['message' => 'User not authenticated'], 401);
-    }
-    $driversLicense = DriversLicense::where('id', $id)
-        ->where('userId', $user->id)
-        ->first();
-    if (!$driversLicense) {
-        return response()->json(['message' => 'Driver\'s license record not found'], 404);
-    }
-    $driversLicense->delete();
-    return response()->json(['message' => 'Driver\'s license record deleted successfully']);
-}
 
 
     public function uploadProfileImage(Request $request)
@@ -453,38 +119,6 @@ public function deleteUserDriversLicense(Request $request, $id)
 
 
 
-    public function uploadCoverImage(Request $request)
-{
-    $request->validate([
-        'coverImage' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048', // max 2MB
-    ]);
-
-    $user = auth()->user();
-
-    if (!$user) {
-        return response()->json(['message' => 'User not authenticated'], 401);
-    }
-
-    if ($request->hasFile('coverImage')) {
-
-        $image = $request->file('coverImage');
-        $imageName = time() . '_' . $user->id . '.' . $image->getClientOriginalExtension();
-
-        // Store using Laravel storage (correct way)
-        $path = $image->storeAs('cover-images', $imageName, 'public');
-
-        // Save the DB path
-        $user->coverImage = $path; // e.g. cover-images/123_1.jpg
-        $user->save();
-
-        return response()->json([
-            'message' => 'Cover image uploaded successfully',
-            'coverImage' => $user->coverImage
-        ]);
-    }
-
-    return response()->json(['message' => 'No image uploaded'], 400);
-}
 
 
 
@@ -504,29 +138,145 @@ public function deleteUserDriversLicense(Request $request, $id)
 }
 
 
-public function userProfile(Request $request)
-{
-    $authUser = Auth::user(); // logged-in user
-    $user = User::with('user_role')->find($authUser->id); // Eager load role
+// public function userProfile(Request $request)
+// {
+//     $authUser = Auth::user(); // logged-in user
+//     $user = User::with('user_role')->find($authUser->id); // Eager load role
 
-    if (!$user) {
-        return response()->json([
-            'message' => 'User not found'
-        ], 404);
+//     if (!$user) {
+//         return response()->json([
+//             'message' => 'User not found'
+//         ], 404);
+//     }
+
+//     return response()->json([
+//         'id' => $user->id,
+//         'firstName' => $user->firstName,
+//         'lastName' => $user->lastName,
+//         'email' => $user->email,
+//         'phoneNumber' => $user->phoneNumber,
+//         'role' => $user->user_role->roleName ?? 'Member', // Get role name with fallback
+//         'user_plan' => $user->current_plan->planName ?? 'Free'
+
+//     ]);
+// }
+
+
+public function userProfile(Request $request): JsonResponse
+{
+    $user = $request->user();
+    $schoolId = $request->header('X-School-ID');
+
+    $isClassTeacher = false;
+    $classHead = [];
+
+    // 🔥 MULTIPLE CLASS SUPPORT
+    if ($user->role === 'teacher' && $user->teacher) {
+
+        $classes = SchoolClass::where('schoolId', $schoolId)
+            ->whereHas('class_teachers', function ($query) use ($user) {
+                $query->where('teacherId', $user->teacher->teacherId);
+            })
+            ->get();
+
+        if ($classes->isNotEmpty()) {
+            $isClassTeacher = true;
+
+            $classHead = $classes->map(function ($class) {
+                return [
+                    'className' => $class->className,
+                    'classId'   => $class->classId
+                ];
+            });
+        }
+    }
+
+    // 🔥 PERMISSION FLAGS
+    $canEditResults = false;
+    $canViewReports = false;
+
+    switch ($user->role) {
+        case 'admin':
+            $canEditResults = true;
+            $canViewReports = true;
+            break;
+
+        case 'teacher':
+            $canEditResults = true; // teachers can edit results
+            $canViewReports = true;
+            break;
+
+        case 'student':
+            $canEditResults = false;
+            $canViewReports = true; // can view own report
+            break;
+
+        default:
+            $canEditResults = false;
+            $canViewReports = false;
+            break;
     }
 
     return response()->json([
-        'id' => $user->id,
         'firstName' => $user->firstName,
-        'lastName' => $user->lastName,
-        'email' => $user->email,
+        'lastName'  => $user->lastName,
+        'email'     => $user->email,
         'phoneNumber' => $user->phoneNumber,
-        'role' => $user->user_role->roleName ?? 'Member', // Get role name with fallback
-        'user_plan' => $user->current_plan->planName ?? 'Free'
+        'role'      => $user->role,
 
+        'isClassTeacher' => true,
+
+        // 🔥 Now returns ARRAY of classes
+        'classHead' => $isClassTeacher ? $classHead : null,
+
+        'signatureUrl' => $user->teacher->signature ?? null,
+
+        // 🔥 PERMISSIONS OBJECT
+        'permissions' => [
+            'canEditResults' => $canEditResults,
+            'canViewReports' => $canViewReports
+        ]
     ]);
 }
 
+public function updateSignature(Request $request)
+{
+    $user = Auth::user();
+
+    if (!$user->teacher) {
+        return response()->json([
+            'message' => 'User is not a teacher'
+        ], 403);
+    }
+
+    $validated = $request->validate([
+        'signature' => 'required|image|mimes:png,jpg,jpeg,svg|max:2048',
+    ]);
+
+    $teacher = $user->teacher;
+
+    if ($request->hasFile('signature')) {
+        if ($teacher->signature) {
+            Storage::disk('public')->delete($teacher->signature);
+        }
+
+        $teacher->signature = $request->file('signature')
+            ->store('teacher-signatures', 'public');
+
+        $teacher->save();
+    }
+
+    return response()->json([
+        'message' => 'Signature updated successfully',
+        'user' => [
+            'firstName'   => $user->fresh()->firstName,
+            'lastName'    => $user->fresh()->lastName,
+            'email'       => $user->email,
+            'phoneNumber' => $user->phoneNumber,
+            'signature'   => $teacher->signature,
+        ]
+    ]);
+}
 
 
 public function updateUser(Request $request)
