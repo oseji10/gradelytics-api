@@ -41,7 +41,7 @@ class Student extends Model
         return $this->belongsTo(SchoolClass::class, 'classId', 'classId');
     }
 
-public function parents()
+public function parents2()
 {
     return $this->belongsToMany(
         StudentParent::class,
@@ -72,4 +72,15 @@ public function club()
     {
         return $this->belongsTo(House::class, 'houseId', 'houseId');
     }
+
+    public function parents()
+{
+    return $this->belongsToMany(
+        User::class,
+        'student_parents',
+        'studentId',
+        'userId'
+    );
+}
+
 }

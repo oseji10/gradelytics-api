@@ -13,7 +13,8 @@ class StudentParentPivot extends Model
     protected $fillable = [
         'parentId',
         'studentId',
-        'schoolId'
+        'schoolId',
+        'userId'
     ];
 
 

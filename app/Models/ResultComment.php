@@ -4,35 +4,27 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class Result extends Model
+class ResultComment extends Model
 {
-    protected $table = 'results';
-    protected $primaryKey = 'resultId';
+    protected $table = 'result_comments';
+    protected $primaryKey = 'commentId';
 
 protected $fillable = [
     'studentId',
     'classId',
-    'subjectId',
+    'teacherId',
     'termId',
     'academicYearId',
     'schoolId',
-    'totalScore',
-    'grade',
-    'remark',
-    'classTeacherComment',
-    'principalComment',
+    'commentedBy',
+    'comment',
+    'commentType',
 ];
 
-public function class_subject()
-    {
-        return $this->belongsTo(ClassSubject::class, 'subjectId');
-    }
 
 
-    public function subject()
-{
-    return $this->belongsTo(Subject::class, 'subjectId', 'subjectId');
-}
+
+
 
     public function term()
 {
@@ -53,6 +45,11 @@ public function class_subject()
     public function student()
 {
     return $this->belongsTo(Student::class, 'studentId', 'studentId');
+}
+
+    public function commenter()
+{
+    return $this->belongsTo(User::class, 'commentedBy', 'id');
 }
 
 }

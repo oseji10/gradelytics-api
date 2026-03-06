@@ -225,4 +225,27 @@ public function subscriptions()
     return $this->hasOne(Teacher::class, 'userId', 'id');
 }
 
+public function admin()
+{
+    return $this->hasOne(Admin::class, 'userId', 'id');
+}
+
+
+public function parent()
+{
+    return $this->hasOne(StudentParentPivot::class, 'userId', 'id');
+    // 'userId' is the foreign key in student_parents table
+    // 'id' is the local key in users table
+}
+
+public function children()
+{
+    return $this->belongsToMany(
+        Student::class,
+        'student_parents', // pivot table
+        'userId',          // foreign key on pivot for user/parent
+        'studentId'        // foreign key on pivot for student
+    );
+}
+
 }

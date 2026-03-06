@@ -21,7 +21,7 @@ class Term extends Model
         'academicYearId',
     ];
 
-    public function academicYear()
+    public function academic_year()
 {
     return $this->belongsTo(AcademicYear::class, 'academicYearId', 'academicYearId');
 }

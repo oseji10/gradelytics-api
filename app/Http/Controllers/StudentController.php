@@ -6,6 +6,8 @@ use App\Models\Customer;
 use Illuminate\Http\Request;
 use App\Models\Role;
 use App\Models\Student;
+use App\Models\StudentParent;
+
 use App\Models\User;
 use App\Models\StudentParentPivot;
 
@@ -29,7 +31,7 @@ class StudentController extends Controller
 public function getSchoolStudents(Request $request)
     {
         $schoolId = $request->header('X-School-ID');
-        $students = Student::with('parents.user', 'user', 'school', 'classes', 'club', 'house')->where('schoolId', $schoolId)
+        $students = Student::with('parents2.user', 'user', 'school', 'classes', 'club', 'house')->where('schoolId', $schoolId)
         ->get();
         return response()->json($students);
 
@@ -241,15 +243,22 @@ $student->update($studentData);
             ]);
         }
 
-        if (!empty($validated['parentId'])) {
+if (!empty($validated['parentId'])) {
 
-    $student->parents()->syncWithoutDetaching([
-        $validated['parentId']
+    $parent = StudentParent::where('parentId', $validated['parentId'])
+        ->where('schoolId', $schoolId)
+        ->firstOrFail();
+
+    $student->parents2()->syncWithoutDetaching([
+        $validated['parentId'] => [
+            'schoolId' => $schoolId,
+            'userId'   => $parent->userId,
+        ]
     ]);
 }
     });
 
-    $student->load(['user', 'school', 'classes', 'parents.user', 'club', 'house']);
+    $student->load(['user', 'school', 'classes', 'parents2.user', 'club', 'house']);
 
     return response()->json([
         'message' => 'Student updated successfully',

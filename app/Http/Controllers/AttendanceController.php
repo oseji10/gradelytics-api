@@ -88,21 +88,37 @@ class AttendanceController extends Controller
 
     foreach ($validated['records'] as $record) {
 
+        // StudentAttendance::updateOrCreate(
+        //     [
+        //         'studentId' => $record['studentId']
+        //         ],
+        //         [
+        //         'classId' => $request->classId,
+        //         'attendanceDate' => $request->date,
+        //         'schoolId' => $schoolId,
+        //         'status' => $record['status'],
+        //         'notes' => $record['notes'] ?? null,
+        //         'teacherId' => auth()->id(),
+        //         'academicYearId' => $session->academicYearId,
+        //         'termId' => $term->termId,
+        //     ]
+        // );
+
         StudentAttendance::updateOrCreate(
-            [
-                'studentId' => $record['studentId']
-                ],
-                [
-                'classId' => $request->classId,
-                'attendanceDate' => $request->date,
-                'schoolId' => $schoolId,
-                'status' => $record['status'],
-                'notes' => $record['notes'] ?? null,
-                'teacherId' => auth()->id(),
-                'academicYearId' => $session->academicYearId,
-                'termId' => $term->termId,
-            ]
-        );
+    [
+        'studentId' => $record['studentId'],
+        'classId' => $request->classId,
+        'attendanceDate' => $request->date,
+        'schoolId' => $schoolId,
+        'academicYearId' => $session->academicYearId,
+        'termId' => $term->termId,
+    ],
+    [
+        'status' => $record['status'],
+        'notes' => $record['notes'] ?? null,
+        'teacherId' => auth()->id(),
+    ]
+);
     }
 
     return response()->json(['message' => 'Attendance marked successfully']);

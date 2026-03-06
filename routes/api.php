@@ -6,16 +6,16 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\PsychomotorController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\ResultController;
-use App\Http\Controllers\StateController;
+use App\Http\Controllers\CbtExamController;
 use App\Http\Controllers\TermsController;
 use App\Http\Controllers\AcademicYearController;
 use App\Http\Controllers\RolesController;
 use App\Http\Controllers\UsersController;
-use App\Http\Controllers\MinistryController;
-use App\Http\Controllers\AgentsController;
+use App\Http\Controllers\PinManagementController;
+use App\Http\Controllers\ParentPortalController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\SuggestedFollowersController;
+use App\Http\Controllers\CbtTopicController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\StockController;
 // use App\Http\Controllers\GradingSystem;
@@ -23,7 +23,7 @@ use App\Http\Controllers\TransactionsController;
 use App\Http\Controllers\ProjectsController;
 use App\Http\Controllers\AssessmentController;
 use App\Http\Controllers\AffectiveController;
-use App\Http\Controllers\FarmersController;
+use App\Http\Controllers\WalletController;
 use App\Http\Controllers\MembershipController;
 use App\Http\Controllers\ServicesController;
 use App\Http\Controllers\UserEmailController;
@@ -225,7 +225,7 @@ Route::middleware(['auth.jwt', 'school'])->group(function () {
    
 
     // Schools
-    Route::get('schools', [SchoolsController::class, 'index']);
+
     Route::post('schools', [SchoolsController::class, 'store']);
     Route::get('schools/user-schools', [SchoolsController::class, 'mySchools']);
     // Route::post('/schools/{schoolId}', [SchoolsController::class, 'update']);
@@ -348,9 +348,20 @@ Route::middleware(['auth.jwt', 'school'])->group(function () {
     Route::patch('/results/{studentId}/principal-comment', [ResultController::class, 'principalComment']);
 
     Route::get('/parents/{parentId}/children', [ParentController::class, 'getParentChildren']);
-    
+
     Route::get('/subscribers', [SubscriptionController::class, 'index']);
     Route::get('/my-subscriptions', [SubscriptionController::class, 'mySubscriptions']);
+
+    
+    Route::post('/admin/parent-access/activate', [ParentAccessController::class, 'activate']);
+    Route::post('/admin/parent-access/revoke', [ParentAccessController::class, 'revoke']);
+
+    Route::get('/wallet-balance', [WalletController::class, 'getWalletBalance']);
+    Route::post('/pins/generate', [PinManagementController::class, 'generate']);
+    Route::get('/pins', [PinManagementController::class, 'getPins']);
+    Route::post('/pins/calculate-price', [PinManagementController::class, 'calculatePrice']);
+    
+    
 
     // Support Routes
     Route::get('/support/tickets', [SupportController::class, 'index']);
@@ -371,19 +382,7 @@ Route::middleware(['auth.jwt', 'school'])->group(function () {
     Route::post('/users/broadcast-email', [UserEmailController::class, 'broadcast']);
     });
 
-    Route::prefix('invoices')->group(function () {
-    Route::get('/{id}/pdf', [InvoicePdfController::class, 'download']);
-    Route::get('/{id}/stream-pdf', [InvoicePdfController::class, 'stream']);
-    Route::get('/{id}/generate-pdf', [InvoicePdfController::class, 'generate']);
-    Route::post('/{id}/send-email', [InvoicePdfController::class, 'sendEmail']);
-    });
-
-    Route::prefix('receipts')->group(function () {
-    Route::get('/{id}/pdf', [InvoicePdfController::class, 'downloadReceipt']);
-    Route::get('/{id}/stream-pdf', [InvoicePdfController::class, 'stream']);
-    Route::get('/{id}/generate-pdf', [InvoicePdfController::class, 'generate']);
-    Route::post('/{id}/send-email', [InvoicePdfController::class, 'sendReceiptEmail']);
-    });
+    
 
     Route::post('/flutterwave/webhook', [WebhookController::class, 'handle']);
     Route::get('/subscription/verify-redirect', [SubscriptionController::class, 'verifyRedirect']);
@@ -395,5 +394,40 @@ Route::middleware(['auth.jwt', 'school'])->group(function () {
     Route::get('/admin/dashboard-details/receipts', [AdminDashboardController::class, 'receiptsDetails']);
     Route::get('/admin/dashboard-details/businesses', [AdminDashboardController::class, 'businessesDetails']);
 
+
+    Route::prefix('cbt')->group(function () {
+    Route::get('/', [CbtExamController::class, 'index']);
+    Route::post('/exams', [CbtExamController::class, 'store']);
+    Route::patch('/{examId}', [CbtExamController::class, 'update']);
+    Route::delete('/exams/{examId}', [CbtExamController::class, 'destroy']);
+
+    Route::get('/questions', [\App\Http\Controllers\CbtQuestionController::class, 'index']);
+    Route::post('/questions', [\App\Http\Controllers\CbtQuestionController::class, 'store']);
+    Route::get('/questions/{questionId}', [\App\Http\Controllers\CbtQuestionController::class, 'show']);
+    Route::patch('/questions/{questionId}', [\App\Http\Controllers\CbtQuestionController::class, 'update']);
+    Route::delete('/questions/{questionId}', [\App\Http\Controllers\CbtQuestionController::class, 'destroy']);
+
+    Route::get('/exams/{examId}/questions', [\App\Http\Controllers\CbtExamBuilderController::class, 'list']);
+    Route::post('/exams/{examId}/questions/attach', [\App\Http\Controllers\CbtExamBuilderController::class, 'attach']);
+    Route::delete('/exams/{examId}/questions/{questionId}', [\App\Http\Controllers\CbtExamBuilderController::class, 'detach']);
+    Route::post('/exams/{examId}/questions/reorder', [\App\Http\Controllers\CbtExamBuilderController::class, 'reorder']);
+
+    Route::get('/topics', [CbtTopicController::class, 'index']);
+    Route::post('/topics', [CbtTopicController::class, 'store']);
+    Route::patch('/topics/{topicId}', [CbtTopicController::class, 'update']);
+    Route::delete('/topics/{topicId}', [CbtTopicController::class, 'destroy']);
+
+
+    });
+
 });
 
+    Route::post('/parent/verify', [ParentPortalController::class, 'verify']);
+    Route::get('schools', [SchoolsController::class, 'index']);
+
+    // Parent portal routes
+    Route::middleware('parent.jwt')->group(function () {
+    Route::get('/grading-system', [GradingController::class, 'index']);
+    Route::get('/result-checker', [ParentPortalController::class, 'resultChecker']);
+    Route::get('/results/student/report-card/{studentId}', [ResultController::class, 'getStudentReportCard']);
+    });
