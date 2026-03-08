@@ -18,23 +18,23 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\CbtTopicController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\StockController;
-// use App\Http\Controllers\GradingSystem;
+use App\Http\Controllers\CbtExamBuilderController;
 use App\Http\Controllers\TransactionsController;
 use App\Http\Controllers\ProjectsController;
 use App\Http\Controllers\AssessmentController;
 use App\Http\Controllers\AffectiveController;
 use App\Http\Controllers\WalletController;
-use App\Http\Controllers\MembershipController;
+use App\Http\Controllers\StudentPortalController;
 use App\Http\Controllers\ServicesController;
 use App\Http\Controllers\UserEmailController;
-use App\Http\Controllers\CompanyController;
+use App\Http\Controllers\StudentCbtController;
 use App\Http\Controllers\ClassController;
 use App\Http\Controllers\ClassController as ControllersClassController;
 use App\Http\Controllers\ResetPasswordController;
 use App\Http\Controllers\ForgotPasswordController;
 use App\Http\Controllers\OtpController;
 use App\Http\Controllers\PostController;
-use App\Http\Controllers\RecruitmentJobApplicationsController;
+use App\Http\Controllers\CbtDashboardController;
 use App\Http\Controllers\LearningController;
 use App\Http\Controllers\LessonController;
 use App\Http\Controllers\StripeWebhookController;
@@ -55,6 +55,7 @@ use App\Http\Controllers\WebhookController;
 use App\Http\Controllers\SupportController;
 use App\Http\Controllers\PlansController;
 use App\Http\Controllers\AdminDashboardController;
+use App\Http\Controllers\CbtMonitorController;
 
 /*
 |--------------------------------------------------------------------------
@@ -363,6 +364,8 @@ Route::middleware(['auth.jwt', 'school'])->group(function () {
     
     
 
+   
+
     // Support Routes
     Route::get('/support/tickets', [SupportController::class, 'index']);
     Route::post('/support/tickets', [SupportController::class, 'store']);
@@ -400,6 +403,8 @@ Route::middleware(['auth.jwt', 'school'])->group(function () {
     Route::post('/exams', [CbtExamController::class, 'store']);
     Route::patch('/{examId}', [CbtExamController::class, 'update']);
     Route::delete('/exams/{examId}', [CbtExamController::class, 'destroy']);
+    Route::patch('/exams/{examId}/publish', [CbtExamController::class, 'togglePublish']);
+    Route::get('/exams/{examId}/monitor', [CbtMonitorController::class, 'show']);
 
     Route::get('/questions', [\App\Http\Controllers\CbtQuestionController::class, 'index']);
     Route::post('/questions', [\App\Http\Controllers\CbtQuestionController::class, 'store']);
@@ -417,13 +422,46 @@ Route::middleware(['auth.jwt', 'school'])->group(function () {
     Route::patch('/topics/{topicId}', [CbtTopicController::class, 'update']);
     Route::delete('/topics/{topicId}', [CbtTopicController::class, 'destroy']);
 
+    Route::get('/exams/{examId}/builder', [CbtExamBuilderController::class, 'builder']);
 
+    Route::post('/exams/{examId}/sections', [CbtExamBuilderController::class, 'createSection']);
+    Route::patch('/sections/{sectionId}', [CbtExamBuilderController::class, 'updateSection']);
+    Route::delete('/sections/{sectionId}', [CbtExamBuilderController::class, 'deleteSection']);
+    Route::post('/exams/{examId}/sections/reorder', [CbtExamBuilderController::class, 'reorderSections']);
+
+    Route::post('/sections/{sectionId}/questions/attach', [CbtExamBuilderController::class, 'attachQuestions']);
+    Route::delete('/sections/{sectionId}/questions/{questionId}', [CbtExamBuilderController::class, 'removeQuestion']);
+    Route::post('/sections/{sectionId}/questions/reorder', [CbtExamBuilderController::class, 'reorderQuestions']);
+
+    Route::patch('/sections/{sectionId}/questions/{questionId}/mark', [CbtExamBuilderController::class, 'updateQuestionMark']);
+    Route::post('/sections/{sectionId}/questions/{questionId}/move', [CbtExamBuilderController::class, 'moveQuestionToSection']);
+    
+    Route::get('/stats', [CbtDashboardController::class, 'stats']);
+    Route::get('/exams', [CbtDashboardController::class, 'exams']);
+    });
+    
     });
 
+    Route::prefix('student')->group(function () {
+    Route::get('/cbt-exams', [StudentCbtController::class, 'index']);
+    Route::get('/dashboard', [StudentPortalController::class, 'studentDashboard']);
+    Route::get('/school-info', [StudentPortalController::class, 'schoolInfo']);
+    Route::get('/exams/status', [StudentPortalController::class, 'studentExamStatus']);
+    });
+
+    Route::prefix('student/cbt')->group(function () {
+    Route::post('{examId}/start', [StudentCbtController::class, 'start']);
+    Route::get('{examId}/attempt', [StudentCbtController::class, 'attempt']);
+    Route::post('{examId}/answer', [StudentCbtController::class, 'saveAnswer']);
+    Route::post('{examId}/submit', [StudentCbtController::class, 'submit']);
+    Route::get('{examId}/submission-summary', [StudentCbtController::class, 'submissionSummary']);
+    Route::get('{examId}/review', [StudentCbtController::class, 'review']);
 });
 
     Route::post('/parent/verify', [ParentPortalController::class, 'verify']);
     Route::get('schools', [SchoolsController::class, 'index']);
+
+    Route::post('/student/login', [StudentPortalController::class, 'studentLogin']);
 
     // Parent portal routes
     Route::middleware('parent.jwt')->group(function () {

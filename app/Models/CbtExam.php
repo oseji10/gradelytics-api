@@ -15,6 +15,7 @@ class CbtExam extends Model
     public $timestamps = true;
 
     protected $fillable = [
+        'examId',
         'schoolId',
         'academicYearId',
         'termId',
@@ -108,4 +109,34 @@ class CbtExam extends Model
         if ($this->endsAt && $now->gt($this->endsAt)) return false;
         return true;
     }
+
+    public function sections()
+{
+    return $this->hasMany(ExamSection::class, 'examId', 'examId')
+        ->orderBy('sectionOrder');
+}
+
+public function canBeModified(): bool
+{
+    return !$this->attempts()
+        ->whereIn('status', ['in_progress', 'submitted', 'timed_out'])
+        ->exists();
+}
+
+// public function class()
+// {
+//     return $this->belongsTo(SchoolClass::class, 'classId', 'classId');
+// }
+
+// public function subject()
+// {
+//     return $this->belongsTo(Subject::class, 'subjectId', 'subjectId');
+// }
+
+// public function sections()
+// {
+//     return $this->hasMany(ExamSection::class, 'examId', 'examId')
+//         ->orderBy('sectionOrder');
+// }
+
 }

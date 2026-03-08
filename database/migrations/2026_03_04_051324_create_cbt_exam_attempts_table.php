@@ -20,6 +20,7 @@ return new class extends Migration
             $table->dateTime('submittedAt')->nullable();
             $table->string('status'); // in_progress, submitted, timed_out
             $table->integer('score')->default(0);
+            $table->integer('totalQuestions')->default(0);
             $table->decimal('percentage', 5, 2)->default(0.00);
             $table->string('grade')->nullable();
             $table->integer('timeSpentSeconds')->default(0);

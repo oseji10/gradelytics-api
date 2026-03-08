@@ -11,19 +11,19 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('cbt_exam_answers', function (Blueprint $table) {
-            $table->id('answerId');
-            $table->unsignedBigInteger('attemptId');
-            $table->unsignedBigInteger('questionId');
-            $table->json('selectedOptionIds')->nullable();
-            $table->text('answerText')->nullable();
-            $table->boolean('isCorrect')->default(false);
-            $table->integer('markAwarded')->default(0);
-            $table->timestamps();
+        // Schema::create('cbt_exam_answers', function (Blueprint $table) {
+        //     $table->id('answerId');
+        //     $table->unsignedBigInteger('attemptId');
+        //     $table->unsignedBigInteger('questionId');
+        //     $table->json('selectedOptionIds')->nullable();
+        //     $table->text('answerText')->nullable();
+        //     $table->boolean('isCorrect')->default(false);
+        //     $table->integer('markAwarded')->default(0);
+        //     $table->timestamps();
 
-            $table->foreign('attemptId')->references('attemptId')->on('cbt_exam_attempts')->onDelete('cascade');
-            $table->foreign('questionId')->references('questionId')->on('cbt_questions')->onDelete('cascade');
-        });
+        //     $table->foreign('attemptId')->references('attemptId')->on('cbt_exam_attempts')->onDelete('cascade');
+        //     $table->foreign('questionId')->references('questionId')->on('cbt_questions')->onDelete('cascade');
+        // });
     }
 
     /**

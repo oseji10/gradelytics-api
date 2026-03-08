@@ -73,5 +73,6 @@ class Kernel extends HttpKernel
     'auth.jwt' => \App\Http\Middleware\VerifyJwtToken::class,
     'school' => \App\Http\Middleware\IdentifySchool::class,
     'parent.jwt' => \App\Http\Middleware\ParentJwtMiddleware::class,
+    'student.jwt' => \App\Http\Middleware\StudentJwtMiddleware::class,
 ];
 }

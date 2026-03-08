@@ -193,6 +193,13 @@ class CbtExamController extends Controller
         // Safety: optionally prevent changes if already published or has attempts
         // if ($exam->isPublished) { ... }
 
+        if (!$exam->canBeModified()) {
+    return response()->json([
+        'status' => 'error',
+        'message' => 'This exam is locked because students have already started or completed attempts.'
+    ], 422);
+}
+
         $exam->fill($validated);
         $exam->save();
 
@@ -290,6 +297,14 @@ class CbtExamController extends Controller
 
         $exam = CbtExam::query()->forSchool($schoolId)->where('examId', $examId)->firstOrFail();
 
+        if (!$exam->canBeModified()) {
+    return response()->json([
+        'status' => 'error',
+        'message' => 'This exam is locked because students have already started or completed attempts.'
+    ], 422);
+}
+
+
         DB::transaction(function () use ($exam) {
             DB::table('exam_questions')->where('examId', $exam->examId)->delete();
             // optionally also delete attempts/answers if you want
@@ -301,4 +316,47 @@ class CbtExamController extends Controller
             'message' => 'Exam deleted',
         ]);
     }
+
+
+    public function togglePublish(Request $request, int $examId): JsonResponse
+    {
+        // $exam = $this->exam($request, $examId);
+        $exam = CbtExam::where('examId', $examId)->first();
+
+        if (!$exam->isPublished) {
+            $exam->loadCount('sections');
+
+            if ((int) $exam->sections_count === 0) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Cannot publish exam without sections.',
+                ], 422);
+            }
+
+            $totalQuestions = \DB::table('exam_section_questions as esq')
+                ->join('exam_sections as es', 'es.examSectionId', '=', 'esq.examSectionId')
+                ->where('es.examId', $exam->examId)
+                ->count();
+
+            if ($totalQuestions === 0) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Cannot publish exam without questions.',
+                ], 422);
+            }
+        }
+
+        $exam->isPublished = !$exam->isPublished;
+        $exam->save();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => $exam->isPublished ? 'Exam published successfully' : 'Exam unpublished successfully',
+            'data' => [
+                'examId' => $exam->examId,
+                'isPublished' => (bool) $exam->isPublished,
+            ],
+        ]);
+    }
+
 }

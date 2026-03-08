@@ -29,19 +29,41 @@ class CbtQuestion extends Model
         'mark' => 'integer',
     ];
 
-    public function options(): HasMany
-    {
-        return $this->hasMany(CbtQuestionOption::class, 'questionId', 'questionId')
-            ->orderByRaw("FIELD(optionLabel,'A','B','C','D','E','F')"); // optional nice ordering
-    }
+    // public function options(): HasMany
+    // {
+    //     return $this->hasMany(CbtQuestionOption::class, 'questionId', 'questionId')
+    //         ->orderByRaw("FIELD(optionLabel,'A','B','C','D','E','F')"); // optional nice ordering
+    // }
 
-    public function subject(): BelongsTo
-    {
-        return $this->belongsTo(Subject::class, 'subjectId', 'subjectId');
-    }
+    // public function subject(): BelongsTo
+    // {
+    //     return $this->belongsTo(Subject::class, 'subjectId', 'subjectId');
+    // }
 
-    public function topic(): BelongsTo
-    {
-        return $this->belongsTo(Topic::class, 'topicId', 'topicId');
-    }
+    // public function topic(): BelongsTo
+    // {
+    //     return $this->belongsTo(Topic::class, 'topicId', 'topicId');
+    // }
+
+    public function subject()
+{
+    return $this->belongsTo(Subject::class, 'subjectId', 'subjectId');
+}
+
+public function topic()
+{
+    return $this->belongsTo(Topic::class, 'topicId', 'topicId');
+}
+
+public function options()
+{
+    return $this->hasMany(CbtQuestionOption::class, 'questionId', 'questionId');
+}
+
+public function correctOption()
+{
+    return $this->hasOne(CbtQuestionOption::class, 'questionId', 'questionId')
+        ->where('isCorrect', true);
+}
+
 }
