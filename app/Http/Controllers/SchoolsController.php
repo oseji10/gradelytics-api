@@ -46,8 +46,8 @@ public function mySchools(Request $request)
     {
         // return $schoolId = $request->header('X-School-ID');
 
-        $schools = School::with('currency', 'payment_gateway')
-        ->where('ownerId', auth()->id())
+        $schools = School::with('owner')
+        ->where('addedBy', auth()->id())
         ->get();
         return response()->json($schools);
     }
