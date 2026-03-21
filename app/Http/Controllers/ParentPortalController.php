@@ -204,11 +204,9 @@ public function logout(Request $request)
 //     }
 // }
 
-
 public function resultChecker(Request $request)
 {
     try {
-        // Get token from cookie and authenticate
         $token = $request->cookie('parent_token');
         if (!$token) {
             return response()->json(['message' => 'Token missing'], 401);
@@ -220,18 +218,15 @@ public function resultChecker(Request $request)
         $schoolId = $payload->get('school_id');
         $parentAccessId = $payload->get('parent_access_id');
 
-        // Fetch grading system for this school
         $grades = GradingSystem::where('schoolId', $schoolId)
             ->orderByDesc('minScore')
             ->get();
 
-        // Fetch school info
         $school = School::where('schoolId', $schoolId)->first();
         if (!$school) {
             return response()->json(['message' => 'School not found'], 404);
         }
 
-        // Get parent access and linked user
         $parentAccess = ParentAccess::with('parent')->find($parentAccessId);
         if (!$parentAccess) {
             return response()->json(['message' => 'Parent access not found'], 404);
@@ -242,131 +237,171 @@ public function resultChecker(Request $request)
             return response()->json(['message' => 'User not found'], 404);
         }
 
-        // Get all children
         $children = $user->children()->get();
         if ($children->isEmpty()) {
             return response()->json(['message' => 'No child found for this parent'], 404);
         }
 
         $allChildrenResults = [];
+        $currentTermPayload = null;
 
         foreach ($children as $child) {
-    $studentId = $child->studentId;
-    $studentAdmissionNumber = $child->admissionNumber;
-    $schoolAssignedAdmissionNumber = $child->schoolAssignedAdmissionNumber;
+            $studentId = $child->studentId;
+            $studentAdmissionNumber = $child->admissionNumber;
 
-    // Fetch the student name
-    $studentUser = User::find($child->userId);
-    $studentName = $studentUser
-        ? ($studentUser->firstName . ' ' . $studentUser->lastName)
-        : 'N/A';
+            $studentUser = User::find($child->userId);
+            $studentName = $studentUser
+                ? trim(($studentUser->firstName ?? '') . ' ' . ($studentUser->lastName ?? ''))
+                : 'N/A';
 
-    $childResults = [];
+            $childResults = [];
 
-    // --- Results ---
-    $termsWithResults = Result::where([
-        'studentId' => $studentId,
-        'schoolId' => $schoolId
-    ])
-    ->with(['term.academic_year', 'subject'])
-    ->get()
-    ->groupBy('termId');
+            $termsWithResults = Result::where([
+                'studentId' => $studentId,
+                'schoolId' => $schoolId
+            ])
+                ->with(['term.academic_year', 'subject'])
+                ->get()
+                ->groupBy('termId');
 
-    foreach ($termsWithResults as $termId => $termResults) {
-        $term = $termResults->first()->term;
-        $academicYear = $term->academic_year;
-        $classId = $termResults->first()->classId;
-
-        $totalScore = 0;
-        $subjectCount = 0;
-        $subjects = [];
-
-        foreach ($termResults as $termResult) {
-            $total = $termResult->totalScore ?? 0;
-
-            $subjects[] = [
-                'subject' => $termResult->subject->subjectName ?? null,
-                'total'   => $total,
-                'grade'   => $this->calculateGradeFromCollection($total, $grades),
+            $lastAttendanceSummary = [
+                'percentage' => 0,
+                'presentDays' => 0,
+                'totalDays' => 0,
+                'lateDays' => 0,
             ];
 
-            $totalScore += $total;
-            $subjectCount++;
+            foreach ($termsWithResults as $termId => $termResults) {
+                $term = $termResults->first()->term;
+                $academicYear = $term->academic_year;
+                $classId = $termResults->first()->classId;
+
+                $totalScore = 0;
+                $subjectCount = 0;
+                $subjects = [];
+
+                foreach ($termResults as $termResult) {
+                    $total = (float) ($termResult->totalScore ?? 0);
+
+                    $subjects[] = [
+                        'subject' => $termResult->subject->subjectName ?? null,
+                        'total'   => $total,
+                        'grade'   => $this->calculateGradeFromCollection($total, $grades),
+                    ];
+
+                    $totalScore += $total;
+                    $subjectCount++;
+                }
+
+                $studentAverage = $subjectCount > 0
+                    ? round($totalScore / $subjectCount, 1)
+                    : 0;
+
+                // Class average = average of each student's average in this class/term/school
+                $classResults = Result::where([
+                    'schoolId' => $schoolId,
+                    'termId'   => $termId,
+                    'classId'  => $classId,
+                ])->get();
+
+                $classAverage = 0;
+
+                if ($classResults->isNotEmpty()) {
+                    $studentAveragesInClass = $classResults
+                        ->groupBy('studentId')
+                        ->map(function ($studentResults) {
+                            $sum = $studentResults->sum(function ($row) {
+                                return (float) ($row->totalScore ?? 0);
+                            });
+
+                            $count = $studentResults->count();
+
+                            return $count > 0 ? ($sum / $count) : 0;
+                        });
+
+                    $classAverage = $studentAveragesInClass->count() > 0
+                        ? round($studentAveragesInClass->avg(), 1)
+                        : 0;
+                }
+
+                $classPosition = $this->getClassPosition(
+                    $studentId,
+                    $termId,
+                    $studentAverage,
+                    $classId,
+                    $schoolId
+                );
+
+                $isPublished = $termResults->first()->isPublished ?? true;
+                $publishedAt = $termResults->first()->publishedAt ?? $termResults->first()->updated_at;
+
+                $termIdValue = $term->termId;
+                $academicYearId = $term->academicYearId;
+
+                $attendanceData = StudentAttendance::where([
+                    'studentId' => $studentId,
+                    'termId' => $termIdValue,
+                    'academicYearId' => $academicYearId,
+                    'schoolId' => $schoolId
+                ])->get();
+
+                $totalDays = $attendanceData->count();
+                $presentDays = $attendanceData->where('status', 'present')->count();
+                $lateDays = $attendanceData->where('status', 'late')->count();
+                $attendancePercentage = $totalDays > 0
+                    ? round(($presentDays / $totalDays) * 100)
+                    : 0;
+
+                $lastAttendanceSummary = [
+                    'percentage' => $attendancePercentage,
+                    'presentDays' => $presentDays,
+                    'totalDays' => $totalDays,
+                    'lateDays' => $lateDays,
+                ];
+
+                $childResults[] = [
+                    'term'           => $term->termName,
+                    'academicYear'   => $academicYear->academicYearName
+                        ?? ($academicYear->startYear . '/' . $academicYear->endYear),
+                    'studentAverage' => $studentAverage,
+                    'classAverage'   => $classAverage,
+                    'overallAverage' => $studentAverage,
+                    'overallGrade'   => $this->calculateGradeFromCollection($studentAverage, $grades),
+                    'classPosition'  => $classPosition,
+                    'isPublished'    => $isPublished,
+                    'publishedAt'    => $publishedAt ? $publishedAt->format('Y-m-d') : null,
+                    'subjects'       => $subjects,
+                    'attendance'     => [
+                        'percentage'  => $attendancePercentage,
+                        'presentDays' => $presentDays,
+                        'totalDays'   => $totalDays,
+                        'lateDays'    => $lateDays
+                    ]
+                ];
+
+                if (!$currentTermPayload) {
+                    $currentTermPayload = [
+                        'termId' => $term->termId,
+                        'termName' => $term->termName,
+                        'academicYear' => $term->academic_year->academicYearName
+                            ?? ($term->academic_year->startYear . '/' . $term->academic_year->endYear)
+                    ];
+                }
+            }
+
+            $allChildrenResults[] = [
+                'studentId' => $studentId,
+                'studentName' => $studentName,
+                'admissionNumber' => $studentAdmissionNumber,
+                'schoolAdmissionNumber' => $child->schoolAssignedAdmissionNumber,
+                'results' => $childResults,
+                'attendance' => $lastAttendanceSummary
+            ];
         }
 
-        $overallAverage = $subjectCount > 0
-            ? round($totalScore / $subjectCount, 1)
-            : 0;
-
-        $classPosition = $this->getClassPosition(
-            $studentId,
-            $termId,
-            $overallAverage,
-            $classId,
-            $schoolId
-        );
-
-        $isPublished = $termResults->first()->isPublished ?? true;
-        $publishedAt = $termResults->first()->publishedAt ?? $termResults->first()->updated_at;
-
-        // --- Attendance per term ---
-$termIdValue = $term->termId;
-$academicYearId = $term->academicYearId;
-
-$attendanceData = StudentAttendance::where([
-    'studentId' => $studentId,
-    'termId' => $termIdValue,
-    'academicYearId' => $academicYearId,
-    'schoolId' => $schoolId
-])->get();
-
-$totalDays = $attendanceData->count();
-$presentDays = $attendanceData->where('status', 'present')->count();
-$lateDays = $attendanceData->where('status', 'late')->count();
-$attendancePercentage = $totalDays > 0 ? round(($presentDays / $totalDays) * 100) : 0;
-
-
-      $childResults[] = [
-    'term'           => $term->termName,
-    'academicYear'   => $academicYear->academicYearName ?? $academicYear->startYear . '/' . $academicYear->endYear,
-    'overallAverage' => $overallAverage,
-    'overallGrade'   => $this->calculateGradeFromCollection($overallAverage, $grades),
-    'classPosition'  => $classPosition,
-    'isPublished'    => $isPublished,
-    'publishedAt'    => $publishedAt ? $publishedAt->format('Y-m-d') : null,
-    'subjects'       => $subjects,
-    'attendance'     => [
-        'percentage'  => $attendancePercentage,
-        'presentDays' => $presentDays,
-        'totalDays'   => $totalDays,
-        'lateDays'    => $lateDays
-    ]
-];
-    }
-
-
-
-    $allChildrenResults[] = [
-        'studentId'    => $studentId,
-        'studentName'  => $studentName,
-        'admissionNumber' => $studentAdmissionNumber,
-        'schoolAdmissionNumber' => $child->schoolAssignedAdmissionNumber,
-        'results'      => $childResults,
-        'attendance'   => [
-            'percentage'  => $attendancePercentage,
-            'presentDays' => $presentDays,
-            'totalDays'   => $totalDays,
-            'lateDays'    => $lateDays
-        ]
-    ];
-}
         return response()->json([
             'message' => 'Results retrieved successfully',
-            'currentTerm' => $term ? [
-        'termId' => $term->termId,
-        'termName' => $term->termName,
-        'academicYear' => $term->academic_year->academicYearName ?? ($term->academic_year->startYear . '/' . $term->academic_year->endYear)
-    ] : null,
+            'currentTerm' => $currentTermPayload,
             'children' => $allChildrenResults,
             'schoolName' => $school->schoolName,
             'schoolLogo' => $school->schoolLogo
@@ -379,7 +414,6 @@ $attendancePercentage = $totalDays > 0 ? round(($presentDays / $totalDays) * 100
         ], 401);
     }
 }
-
 /**
  * Calculate grade based on score
  */

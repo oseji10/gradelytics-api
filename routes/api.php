@@ -13,6 +13,7 @@ use App\Http\Controllers\RolesController;
 use App\Http\Controllers\UsersController;
 use App\Http\Controllers\PinManagementController;
 use App\Http\Controllers\ParentPortalController;
+// use App\Http\Controllers\ParentController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\CbtTopicController;
@@ -56,6 +57,11 @@ use App\Http\Controllers\SupportController;
 use App\Http\Controllers\PlansController;
 use App\Http\Controllers\AdminDashboardController;
 use App\Http\Controllers\CbtMonitorController;
+
+use App\Http\Controllers\AdminJambController;
+use App\Http\Controllers\ParentController as ControllersParentController;
+use App\Http\Controllers\StaffController;
+use App\Http\Controllers\StudentJambController;
 
 /*
 |--------------------------------------------------------------------------
@@ -108,6 +114,7 @@ use App\Http\Controllers\CbtMonitorController;
 
     Route::get('/users', [UsersController::class, 'index']);
 Route::middleware(['auth.jwt', 'school'])->group(function () {
+Route::patch('/school/current-period', [SchoolsController::class, 'updateCurrentPeriod']);
 
     Route::get('/user', function () {
         // $user = auth()->user(); // Use the 'api' guard for JWT
@@ -362,9 +369,25 @@ Route::middleware(['auth.jwt', 'school'])->group(function () {
     Route::get('/pins', [PinManagementController::class, 'getPins']);
     Route::post('/pins/calculate-price', [PinManagementController::class, 'calculatePrice']);
     
-    
 
+
+
+Route::prefix('admin/jamb')->group(function () {
+    Route::get('/subjects', [AdminJambController::class, 'subjects']);
+    Route::post('/subjects', [AdminJambController::class, 'storeSubject']);
+
+    Route::get('/topics', [AdminJambController::class, 'topics']);
+    Route::post('/topics', [AdminJambController::class, 'storeTopic']);
+
+    Route::get('/questions', [AdminJambController::class, 'questions']);
+    Route::post('/questions', [AdminJambController::class, 'storeQuestion']);
+    Route::put('/questions/{questionId}', [AdminJambController::class, 'updateQuestion']);
+    Route::delete('/questions/{questionId}', [AdminJambController::class, 'deleteQuestion']);
+    Route::get('/questions/{questionId}', [AdminJambController::class, 'showQuestion']);
+});
    
+Route::get('/staff', [StaffController::class, 'index']);
+Route::get('/parents-list', [ParentController::class, 'index2']);
 
     // Support Routes
     Route::get('/support/tickets', [SupportController::class, 'index']);
@@ -438,8 +461,12 @@ Route::middleware(['auth.jwt', 'school'])->group(function () {
     
     Route::get('/stats', [CbtDashboardController::class, 'stats']);
     Route::get('/exams', [CbtDashboardController::class, 'exams']);
+
+    Route::post('/exams/{examId}/force-end', [StudentCbtController::class, 'forceEndExam']);
     });
     
+    
+
     });
 
     Route::prefix('student')->group(function () {
@@ -447,15 +474,33 @@ Route::middleware(['auth.jwt', 'school'])->group(function () {
     Route::get('/dashboard', [StudentPortalController::class, 'studentDashboard']);
     Route::get('/school-info', [StudentPortalController::class, 'schoolInfo']);
     Route::get('/exams/status', [StudentPortalController::class, 'studentExamStatus']);
+    Route::post('/logout', [StudentController::class, 'logout']);
     });
 
     Route::prefix('student/cbt')->group(function () {
-    Route::post('{examId}/start', [StudentCbtController::class, 'start']);
-    Route::get('{examId}/attempt', [StudentCbtController::class, 'attempt']);
-    Route::post('{examId}/answer', [StudentCbtController::class, 'saveAnswer']);
-    Route::post('{examId}/submit', [StudentCbtController::class, 'submit']);
-    Route::get('{examId}/submission-summary', [StudentCbtController::class, 'submissionSummary']);
-    Route::get('{examId}/review', [StudentCbtController::class, 'review']);
+    Route::post('/{examId}/start', [StudentCbtController::class, 'start']);
+    Route::get('/{examId}/attempt', [StudentCbtController::class, 'attempt']);
+    Route::post('/{examId}/answer', [StudentCbtController::class, 'saveAnswer']);
+    Route::post('/{examId}/submit', [StudentCbtController::class, 'submit']);
+    Route::get('/{examId}/submission-summary', [StudentCbtController::class, 'submissionSummary']);
+    Route::get('/{examId}/review', [StudentCbtController::class, 'review']);
+    Route::get('/{examId}/resume-summary', [StudentCbtController::class, 'resumeSummary']);
+
+    Route::post('/{examId}/heartbeat', [StudentCbtController::class, 'heartbeat']);
+    Route::post('/{examId}/pause', [StudentCbtController::class, 'pauseExam']);
+    Route::post('/{examId}/resume', [StudentCbtController::class, 'resumeExam']);
+    
+    Route::prefix('student/jamb')->group(function () {
+    Route::get('/dashboard', [StudentJambController::class, 'dashboard']);
+    Route::get('/subjects', [StudentJambController::class, 'subjects']);
+    Route::get('/topics', [StudentJambController::class, 'topics']);
+
+    Route::post('/practice/start', [StudentJambController::class, 'startPractice']);
+    Route::get('/attempts/{attemptId}', [StudentJambController::class, 'showAttempt']);
+    Route::post('/attempts/{attemptId}/answer', [StudentJambController::class, 'saveAnswer']);
+    Route::post('/attempts/{attemptId}/submit', [StudentJambController::class, 'submit']);
+    Route::get('/attempts/{attemptId}/result', [StudentJambController::class, 'result']);
+});
 });
 
     Route::post('/parent/verify', [ParentPortalController::class, 'verify']);
@@ -466,6 +511,7 @@ Route::middleware(['auth.jwt', 'school'])->group(function () {
     // Parent portal routes
     Route::middleware('parent.jwt')->group(function () {
     Route::get('/grading-system', [GradingController::class, 'index']);
+    Route::get('/grading-system/for-parents', [GradingController::class, 'indexForParents']);
     Route::get('/result-checker', [ParentPortalController::class, 'resultChecker']);
     Route::get('/results/student/report-card/{studentId}', [ResultController::class, 'getStudentReportCard']);
     });

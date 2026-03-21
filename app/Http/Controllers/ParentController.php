@@ -13,6 +13,11 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
+
+
+use Illuminate\Http\JsonResponse;
+
+
 use Illuminate\Support\Facades\Mail;
 
 class ParentController extends Controller
@@ -23,6 +28,90 @@ class ParentController extends Controller
         return response()->json($parents);
 
     }
+
+
+
+    public function index2(Request $request): JsonResponse
+    {
+        try {
+            $schoolId = $request->header('X-School-ID');
+
+            if (!$schoolId) {
+                return response()->json([
+                    'message' => 'School not found'
+                ], 401);
+            }
+
+            $parents = DB::table('parents as p')
+                ->join('users as pu', 'p.userId', '=', 'pu.id')
+                ->leftJoin('student_parents as ps', 'p.parentId', '=', 'ps.parentId')
+                ->leftJoin('students as s', function ($join) use ($schoolId) {
+                    $join->on('ps.studentId', '=', 's.studentId')
+                        ->where('s.schoolId', '=', $schoolId);
+                })
+                ->leftJoin('users as su', 's.userId', '=', 'su.id')
+                ->leftJoin('class_students as sc', 's.studentId', '=', 'sc.studentId')
+                ->leftJoin('classes as c', function ($join) use ($schoolId) {
+                    $join->on('sc.classId', '=', 'c.classId')
+                        ->where('c.schoolId', '=', $schoolId);
+                })
+                ->where('p.schoolId', $schoolId)
+                ->select(
+                    'p.parentId',
+                    'p.userId',
+                    'p.schoolId',
+
+                    'pu.firstName',
+                    'pu.lastName',
+                    'pu.otherNames',
+                    'pu.email',
+                    'pu.phoneNumber',
+                    // 'pu.gender',
+
+                    DB::raw('COUNT(DISTINCT s.studentId) as childrenCount'),
+                    DB::raw('GROUP_CONCAT(DISTINCT c.className ORDER BY c.className SEPARATOR ", ") as classNames'),
+                    DB::raw("
+                        GROUP_CONCAT(
+                            DISTINCT CONCAT(
+                                COALESCE(su.firstName, ''),
+                                ' ',
+                                COALESCE(su.lastName, ''),
+                                CASE
+                                    WHEN su.otherNames IS NOT NULL AND su.otherNames != ''
+                                    THEN CONCAT(' ', su.otherNames)
+                                    ELSE ''
+                                END
+                            )
+                            ORDER BY su.firstName, su.lastName
+                            SEPARATOR ' | '
+                        ) as childrenNames
+                    ")
+                )
+                ->groupBy(
+                    'p.parentId',
+                    'p.userId',
+                    'p.schoolId',
+                    'pu.firstName',
+                    'pu.lastName',
+                    'pu.otherNames',
+                    'pu.email',
+                    'pu.phoneNumber',
+                    // 'pu.gender'
+                )
+                ->orderBy('pu.lastName')
+                ->orderBy('pu.firstName')
+                ->get();
+
+            return response()->json($parents);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'message' => 'Failed to load parents list',
+                'error' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
+    }
+
+
 
 public function getSchoolParents(Request $request)
     {

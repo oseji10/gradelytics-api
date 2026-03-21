@@ -11,6 +11,13 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
+
+use Illuminate\Http\JsonResponse;
+use App\Models\AcademicYear;
+use App\Models\Term;
+use Tymon\JWTAuth\Facades\JWTAuth;
+use Tymon\JWTAuth\Exceptions\JWTException;
+
 class SchoolsController extends Controller
 {
     public function index(Request $request)
@@ -329,5 +336,96 @@ public function toggleSchoolStatus(Request $request, $schoolId)
     ]);
 }
 
+
+
+public function updateCurrentPeriod(Request $request): JsonResponse
+{
+    try {
+        $schoolId = $request->header('X-School-ID');
+        if (!$schoolId) {
+            return response()->json([
+                'message' => 'School not found'
+            ], 401);
+        }
+
+        $validated = $request->validate([
+            'academicYearId' => ['required', 'integer'],
+            'termId' => ['required', 'integer'],
+        ]);
+
+        $academicYear = AcademicYear::where('schoolId', $schoolId)
+            ->where('academicYearId', $validated['academicYearId'])
+            ->first();
+
+        if (!$academicYear) {
+            return response()->json([
+                'message' => 'Selected academic session was not found for this school'
+            ], 404);
+        }
+
+        $term = Term::where('schoolId', $schoolId)
+            ->where('termId', $validated['termId'])
+            ->first();
+
+        if (!$term) {
+            return response()->json([
+                'message' => 'Selected term was not found for this school'
+            ], 404);
+        }
+
+        if ((int) $term->academicYearId !== (int) $academicYear->academicYearId) {
+            return response()->json([
+                'message' => 'Selected term does not belong to the selected academic session'
+            ], 422);
+        }
+
+        DB::transaction(function () use ($schoolId, $validated) {
+            AcademicYear::where('schoolId', $schoolId)
+                ->update(['isActive' => 0]);
+
+            AcademicYear::where('schoolId', $schoolId)
+                ->where('academicYearId', $validated['academicYearId'])
+                ->update(['isActive' => 1]);
+
+            Term::where('schoolId', $schoolId)
+                ->update(['isActive' => 0]);
+
+            Term::where('schoolId', $schoolId)
+                ->where('termId', $validated['termId'])
+                ->update(['isActive' => 1]);
+        });
+
+        $freshAcademicYear = AcademicYear::where('schoolId', $schoolId)
+            ->where('academicYearId', $validated['academicYearId'])
+            ->first();
+
+        $freshTerm = Term::where('schoolId', $schoolId)
+            ->where('termId', $validated['termId'])
+            ->first();
+
+        return response()->json([
+            'message' => 'Current period updated successfully',
+            'currentSession' => [
+                'academicYearId' => $freshAcademicYear->academicYearId,
+                'academicYearName' => $freshAcademicYear->academicYearName,
+            ],
+            'currentTerm' => [
+                'termId' => $freshTerm->termId,
+                'termName' => $freshTerm->termName,
+                'academicYearId' => $freshTerm->academicYearId,
+            ],
+        ]);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        return response()->json([
+            'message' => 'Validation failed',
+            'errors' => $e->errors()
+        ], 422);
+    } catch (\Throwable $e) {
+        return response()->json([
+            'message' => 'Failed to update current period',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
 
 }

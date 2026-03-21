@@ -176,7 +176,6 @@ class StudentCbtController extends Controller
                 'message' => 'Failed to load student CBT exams',
             ], 500);
         }
-
     }
     protected function getAuthenticatedStudent(Request $request): array
     {
@@ -210,9 +209,9 @@ class StudentCbtController extends Controller
         $exam = CbtExam::with([
             'sections.questions.options'
         ])
-        ->where('examId', $examId)
-        ->where('schoolId', $schoolId)
-        ->first();
+            ->where('examId', $examId)
+            ->where('schoolId', $schoolId)
+            ->first();
 
         if (!$exam) {
             abort(response()->json(['message' => 'Exam not found'], 404));
@@ -247,30 +246,17 @@ class StudentCbtController extends Controller
         return false;
     }
 
-    protected function buildAttemptResponse(CbtExam $exam, CbtExamAttempt $attempt, Student $student): array
+   protected function buildAttemptResponse(CbtExam $exam, CbtExamAttempt $attempt, Student $student): array
 {
-    $now = Carbon::now();
-
-    $absoluteEnd = $exam->endTime ? Carbon::parse($exam->endTime) : null;
-    $attemptEnd = $attempt->startedAt
-        ? Carbon::parse($attempt->startedAt)->addMinutes((int) $exam->durationMinutes)
-        : null;
-
-    $effectiveEnd = $attemptEnd;
-
-    if ($absoluteEnd && $attemptEnd) {
-        $effectiveEnd = $absoluteEnd->lt($attemptEnd) ? $absoluteEnd : $attemptEnd;
-    } elseif ($absoluteEnd) {
-        $effectiveEnd = $absoluteEnd;
-    }
-
-    $timeRemainingSeconds = $effectiveEnd
-        ? max(0, $now->diffInSeconds($effectiveEnd, false))
-        : 0;
-
     $answers = CbtExamAnswer::where('attemptId', $attempt->attemptId)
         ->get()
         ->keyBy('questionId');
+
+    // purely for display only
+    $displayEndsAt = null;
+    if ($attempt->status === 'in_progress' && (int) $attempt->timeRemainingSeconds > 0) {
+        $displayEndsAt = now()->copy()->addSeconds((int) $attempt->timeRemainingSeconds);
+    }
 
     return [
         'exam' => [
@@ -279,16 +265,16 @@ class StudentCbtController extends Controller
             'subjectName' => optional($exam->subject)->subjectName,
             'durationMinutes' => (int) $exam->durationMinutes,
             'instruction' => $exam->instruction,
-            'startedAt' => optional($attempt->startedAt)->toDateTimeString(),
-            'endsAt' => $effectiveEnd?->toDateTimeString(),
-            'timeRemainingSeconds' => $timeRemainingSeconds,
+            'startedAt' => optional($attempt->startedAt)?->toDateTimeString(),
+            'endsAt' => $displayEndsAt?->toDateTimeString(),
+            'timeRemainingSeconds' => (int) $attempt->timeRemainingSeconds,
         ],
         'student' => [
-    'studentId' => $student->studentId,
-    'studentName' => trim(($student->user->firstName ?? '') . ' ' . ($student->user->lastName ?? '')),
-    'className' => $student->classes()->first()?->className,
-    'passportUrl' => $student->passport ? url($student->passport) : null,
-],
+            'studentId' => $student->studentId,
+            'studentName' => trim(($student->user->firstName ?? '') . ' ' . ($student->user->lastName ?? '')),
+            'className' => $student->classes()->first()?->className,
+            'passportUrl' => $student->passport ? url($student->passport) : null,
+        ],
         'attempt' => [
             'attemptId' => $attempt->attemptId,
             'status' => $attempt->status,
@@ -327,66 +313,110 @@ class StudentCbtController extends Controller
         })->values(),
     ];
 }
+
     public function start(Request $request, int $examId): JsonResponse
-    {
-        $auth = $this->getAuthenticatedStudent($request);
-        $student = $auth['student'];
-        $studentId = $auth['studentId'];
-        $schoolId = $auth['schoolId'];
+{
+    $auth = $this->getAuthenticatedStudent($request);
+    $student = $auth['student'];
+    $studentId = $auth['studentId'];
+    $schoolId = $auth['schoolId'];
 
-        $exam = $this->getExamForStudent($examId, $schoolId, $student);
+    $exam = $this->getExamForStudent($examId, $schoolId, $student);
 
-        $now = Carbon::now();
+    $now = Carbon::now();
 
-        if ($exam->startTime && $now->lt(Carbon::parse($exam->startTime))) {
-            return response()->json([
-                'message' => 'This exam has not started yet',
-            ], 403);
-        }
+    if ($exam->startTime && $now->lt(Carbon::parse($exam->startTime))) {
+        return response()->json([
+            'message' => 'This exam has not started yet',
+        ], 403);
+    }
 
-        if ($exam->endTime && $now->gt(Carbon::parse($exam->endTime))) {
-            return response()->json([
-                'message' => 'This exam is no longer available',
-            ], 403);
-        }
+    if ($exam->endTime && $now->gt(Carbon::parse($exam->endTime))) {
+        return response()->json([
+            'message' => 'This exam is no longer available',
+        ], 403);
+    }
 
-        $existingAttempt = CbtExamAttempt::where('examId', $exam->examId)
-            ->where('studentId', $studentId)
-            ->where('schoolId', $schoolId)
-            ->whereIn('status', ['in_progress', 'completed'])
-            ->latest('attemptId')
-            ->first();
+    $attempt = CbtExamAttempt::where('examId', $exam->examId)
+        ->where('studentId', $studentId)
+        ->where('schoolId', $schoolId)
+        ->whereIn('status', ['in_progress', 'paused', 'completed', 'expired'])
+        ->latest('attemptId')
+        ->first();
 
-        if ($existingAttempt && $existingAttempt->status === 'completed') {
+
+        if ($response = $this->ensureExamNotForceEnded($exam)) {
+    return $response;
+}
+
+    if ($attempt) {
+        $this->autoPauseIfHeartbeatMissing($attempt, 30);
+        $attempt->refresh();
+
+        if ($attempt->status === 'completed') {
             return response()->json([
                 'message' => 'You have already completed this exam',
             ], 403);
         }
 
-        if (!$existingAttempt) {
-            $totalQuestions = $exam->sections->sum(fn($section) => $section->questions->count());
-
-            $existingAttempt = CbtExamAttempt::create([
-                'examId' => $exam->examId,
-                'studentId' => $studentId,
-                'schoolId' => $schoolId,
-                'classId' => $exam->classId,
-                'startedAt' => now(),
-                'status' => 'in_progress',
-                'score' => 0,
-                'totalQuestions' => $totalQuestions,
-                'answeredQuestions' => 0,
-                'timeSpentSeconds' => 0,
+        if ((int) $attempt->timeRemainingSeconds <= 0 || $attempt->status === 'expired') {
+            $attempt->update([
+                'status' => 'expired',
+                'timeRemainingSeconds' => 0,
             ]);
+
+            return response()->json([
+                'message' => 'Exam attempt has expired',
+            ], 410);
         }
 
-        
-        return response()->json([
-            'message' => 'Exam started successfully',
-            'data' => $this->buildAttemptResponse($exam, $existingAttempt, $student),
+        if ($attempt->status === 'paused') {
+            $attempt->update([
+                'status' => 'in_progress',
+                'pausedAt' => null,
+                'lastHeartbeatAt' => now(),
+            ]);
+
+            $attempt->refresh();
+        } elseif ($attempt->status === 'in_progress' && !$attempt->lastHeartbeatAt) {
+            $attempt->update([
+                'lastHeartbeatAt' => now(),
+            ]);
+
+            $attempt->refresh();
+        }
+    } else {
+        $totalQuestions = $exam->sections->sum(
+            fn($section) => $section->questions->count()
+        );
+
+        $startedAt = $now->copy();
+        $endsAt = $startedAt->copy()->addMinutes((int) $exam->durationMinutes);
+
+        $attempt = CbtExamAttempt::create([
+            'examId' => $exam->examId,
+            'studentId' => $studentId,
+            'schoolId' => $schoolId,
+            'classId' => $exam->classId,
+            'startedAt' => $startedAt,
+            'endsAt' => $endsAt,
+            'status' => 'in_progress',
+            'score' => 0,
+            'totalQuestions' => $totalQuestions,
+            'answeredQuestions' => 0,
+            'timeSpentSeconds' => 0,
+            'timeRemainingSeconds' => ((int) $exam->durationMinutes) * 60,
+            'lastHeartbeatAt' => now(),
+            'pauseCount' => 0,
+            'totalPausedSeconds' => 0,
         ]);
     }
 
+    return response()->json([
+        'message' => 'Exam started successfully',
+        'data' => $this->buildAttemptResponse($exam, $attempt, $student),
+    ]);
+}
     public function attempt(Request $request, int $examId): JsonResponse
     {
         $auth = $this->getAuthenticatedStudent($request);
@@ -402,6 +432,10 @@ class StudentCbtController extends Controller
             ->latest('attemptId')
             ->first();
 
+            if ($attempt) {
+    $this->autoPauseIfHeartbeatMissing($attempt, 30);
+    $attempt->refresh();
+}
         if (!$attempt) {
             return response()->json([
                 'message' => 'No active attempt found for this exam',
@@ -414,130 +448,47 @@ class StudentCbtController extends Controller
             ], 403);
         }
 
-        if ($this->examHasExpired($exam, $attempt)) {
-            $this->finalizeAttempt($exam, $attempt);
+        if ((int) $attempt->timeRemainingSeconds <= 0) {
+            $attempt->update([
+                'status' => 'expired',
+                'timeRemainingSeconds' => 0,
+            ]);
 
             return response()->json([
-                'message' => 'Time has elapsed. Exam submitted automatically.',
-            ], 403);
+                'message' => 'Exam attempt has expired',
+            ], 410);
         }
 
-        return response()->json($this->buildAttemptResponse($exam, $attempt, $student));
-    }
+        if ($attempt->status === 'paused') {
+            $attempt->update([
+                'status' => 'in_progress',
+                'pausedAt' => null,
+                'lastHeartbeatAt' => now(),
+            ]);
 
+            $attempt->refresh();
+        } elseif ($attempt->status === 'in_progress' && !$attempt->lastHeartbeatAt) {
+            $attempt->update([
+                'lastHeartbeatAt' => now(),
+            ]);
+
+            $attempt->refresh();
+        }
+
+        return response()->json([
+            'message' => 'Attempt loaded successfully',
+            'data' => $this->buildAttemptResponse($exam, $attempt, $student),
+        ]);
+    }
     public function saveAnswer(Request $request, int $examId): JsonResponse
-{
-    $request->validate([
-        'questionId' => 'required|integer',
-        'selectedOptionId' => 'nullable|integer',
-        'answerText' => 'nullable|string',
-        'isFlagged' => 'nullable|boolean',
-    ]);
-
-    $auth = $this->getAuthenticatedStudent($request);
-    $student = $auth['student'];
-    $studentId = $auth['studentId'];
-    $schoolId = $auth['schoolId'];
-
-    $exam = $this->getExamForStudent($examId, $schoolId, $student);
-
-    $attempt = CbtExamAttempt::where('examId', $exam->examId)
-        ->where('studentId', $studentId)
-        ->where('schoolId', $schoolId)
-        ->where('status', 'in_progress')
-        ->latest('attemptId')
-        ->first();
-
-    if (!$attempt) {
-        return response()->json([
-            'message' => 'No active exam attempt found',
-        ], 404);
-    }
-
-    if ($this->examHasExpired($exam, $attempt)) {
-        $this->finalizeAttempt($exam, $attempt);
-
-        return response()->json([
-            'message' => 'Time has elapsed. Exam submitted automatically.',
-        ], 403);
-    }
-
-    $question = $exam->sections
-        ->flatMap(fn ($section) => $section->questions)
-        ->firstWhere('questionId', (int) $request->questionId);
-
-    if (!$question) {
-        return response()->json([
-            'message' => 'Question not found in this exam',
-        ], 404);
-    }
-
-    $selectedOptionId = $request->selectedOptionId ? (int) $request->selectedOptionId : null;
-    $answerText = $request->answerText;
-    $isFlagged = (bool) $request->boolean('isFlagged', false);
-
-    $isCorrect = null;
-    $scoreAwarded = 0;
-
-    // Try to detect correct option robustly
-    $correctOption = $question->options->first(function ($option) {
-        return (int) ($option->isCorrect ?? 0) === 1 || $option->isCorrect === true;
-    });
-
-    // Score objective questions whenever a correct option exists
-    if ($correctOption && $selectedOptionId) {
-        $isCorrect = ((int) $selectedOptionId === (int) $correctOption->optionId);
-        $scoreAwarded = $isCorrect ? (float) ($question->mark ?? 1) : 0;
-    }
-
-    $answer = CbtExamAnswer::updateOrCreate(
-        [
-            'attemptId' => $attempt->attemptId,
-            'questionId' => $question->questionId,
-        ],
-        [
-            'examId' => $exam->examId,
-            'studentId' => $studentId,
-            'selectedOptionId' => $selectedOptionId,
-            'answerText' => $answerText,
-            'isCorrect' => $isCorrect,
-            'scoreAwarded' => $scoreAwarded,
-            'isFlagged' => $isFlagged,
-            'answeredAt' => now(),
-        ]
-    );
-
-    $answeredCount = CbtExamAnswer::where('attemptId', $attempt->attemptId)
-        ->where(function ($query) {
-            $query->whereNotNull('selectedOptionId')
-                ->orWhereNotNull('answerText');
-        })
-        ->count();
-
-    $attemptScore = (float) CbtExamAnswer::where('attemptId', $attempt->attemptId)->sum('scoreAwarded');
-
-    $attempt->update([
-        'answeredQuestions' => $answeredCount,
-        'score' => $attemptScore,
-    ]);
-
-    return response()->json([
-        'message' => 'Answer saved successfully',
-        'data' => [
-            'answerId' => $answer->answerId,
-            'questionId' => $answer->questionId,
-            'selectedOptionId' => $answer->selectedOptionId,
-            'answerText' => $answer->answerText,
-            'isFlagged' => (bool) $answer->isFlagged,
-            'isCorrect' => $answer->isCorrect,
-            'scoreAwarded' => (float) $answer->scoreAwarded,
-            'attemptScore' => $attemptScore,
-        ],
-    ]);
-}
-
-    public function submit(Request $request, int $examId): JsonResponse
     {
+        $request->validate([
+            'questionId' => 'required|integer',
+            'selectedOptionId' => 'nullable|integer',
+            'answerText' => 'nullable|string',
+            'isFlagged' => 'nullable|boolean',
+        ]);
+
         $auth = $this->getAuthenticatedStudent($request);
         $student = $auth['student'];
         $studentId = $auth['studentId'];
@@ -557,6 +508,267 @@ class StudentCbtController extends Controller
                 'message' => 'No active exam attempt found',
             ], 404);
         }
+
+
+        if ($response = $this->ensureExamNotForceEnded($exam)) {
+    return $response;
+}
+
+        $this->autoPauseIfHeartbeatMissing($attempt, 30);
+$attempt->refresh();
+
+        if ((int) $attempt->timeRemainingSeconds <= 0 || $attempt->status !== 'in_progress') {
+    return response()->json([
+        'message' => 'This exam is no longer active',
+    ], 403);
+}
+
+        $question = $exam->sections
+            ->flatMap(fn($section) => $section->questions)
+            ->firstWhere('questionId', (int) $request->questionId);
+
+        if (!$question) {
+            return response()->json([
+                'message' => 'Question not found in this exam',
+            ], 404);
+        }
+
+        $selectedOptionId = $request->selectedOptionId ? (int) $request->selectedOptionId : null;
+        $answerText = $request->answerText;
+        $isFlagged = (bool) $request->boolean('isFlagged', false);
+
+        $isCorrect = null;
+        $scoreAwarded = 0;
+
+        // Try to detect correct option robustly
+        $correctOption = $question->options->first(function ($option) {
+            return (int) ($option->isCorrect ?? 0) === 1 || $option->isCorrect === true;
+        });
+
+        // Score objective questions whenever a correct option exists
+        if ($correctOption && $selectedOptionId) {
+            $isCorrect = ((int) $selectedOptionId === (int) $correctOption->optionId);
+            $scoreAwarded = $isCorrect ? (float) ($question->mark ?? 1) : 0;
+        }
+
+        $answer = CbtExamAnswer::updateOrCreate(
+            [
+                'attemptId' => $attempt->attemptId,
+                'questionId' => $question->questionId,
+            ],
+            [
+                'examId' => $exam->examId,
+                'studentId' => $studentId,
+                'selectedOptionId' => $selectedOptionId,
+                'answerText' => $answerText,
+                'isCorrect' => $isCorrect,
+                'scoreAwarded' => $scoreAwarded,
+                'isFlagged' => $isFlagged,
+                'answeredAt' => now(),
+            ]
+        );
+
+        $answeredCount = CbtExamAnswer::where('attemptId', $attempt->attemptId)
+            ->where(function ($query) {
+                $query->whereNotNull('selectedOptionId')
+                    ->orWhereNotNull('answerText');
+            })
+            ->count();
+
+        $attemptScore = (float) CbtExamAnswer::where('attemptId', $attempt->attemptId)->sum('scoreAwarded');
+
+        $attempt->update([
+            'answeredQuestions' => $answeredCount,
+            'score' => $attemptScore,
+        ]);
+
+        return response()->json([
+            'message' => 'Answer saved successfully',
+            'data' => [
+                'answerId' => $answer->answerId,
+                'questionId' => $answer->questionId,
+                'selectedOptionId' => $answer->selectedOptionId,
+                'answerText' => $answer->answerText,
+                'isFlagged' => (bool) $answer->isFlagged,
+                'isCorrect' => $answer->isCorrect,
+                'scoreAwarded' => (float) $answer->scoreAwarded,
+                'attemptScore' => $attemptScore,
+            ],
+        ]);
+    }
+
+
+    public function heartbeat(Request $request, int $examId): JsonResponse
+{
+    $student = $this->getAuthenticatedStudent($request);
+    if (!$student) {
+        return response()->json(['message' => 'Unauthenticated'], 401);
+    }
+
+    $exam = CbtExam::where('examId', $examId)
+        ->where('schoolId', $student['schoolId'])
+        ->first();
+
+    if (!$exam) {
+        return response()->json(['message' => 'Exam not found'], 404);
+    }
+
+    $attempt = CbtExamAttempt::where('examId', $examId)
+        ->where('studentId', $student['studentId'])
+        ->where('schoolId', $student['schoolId'])
+        ->latest('attemptId')
+        ->first();
+
+    if (!$attempt) {
+        return response()->json(['message' => 'Attempt not found'], 404);
+    }
+
+    if ($exam->forceEndedAt) {
+        if (!in_array($attempt->status, ['completed', 'expired'])) {
+            $this->finalizeExamAttempt($attempt, true);
+            $attempt->refresh();
+        }
+
+        return response()->json([
+            'message' => 'Exam has been ended by the examiner.',
+            'timeRemainingSeconds' => 0,
+            'status' => 'completed',
+            'forceEnded' => true,
+        ], 200);
+    }
+
+    if ($attempt->status !== 'in_progress') {
+        return response()->json([
+            'message' => 'Attempt is not active',
+            'timeRemainingSeconds' => (int) $attempt->timeRemainingSeconds,
+            'status' => $attempt->status,
+        ], 409);
+    }
+
+    $now = now();
+
+    $elapsed = $attempt->lastHeartbeatAt
+        ? Carbon::parse($attempt->lastHeartbeatAt)->diffInSeconds($now)
+        : 0;
+
+    $remaining = max(0, ((int) $attempt->timeRemainingSeconds) - $elapsed);
+
+    $attempt->timeRemainingSeconds = $remaining;
+    $attempt->lastHeartbeatAt = $now;
+
+    if ($remaining <= 0) {
+        $attempt->status = 'expired';
+        $attempt->timeRemainingSeconds = 0;
+    }
+
+    $attempt->save();
+
+    return response()->json([
+        'message' => 'Heartbeat recorded',
+        'timeRemainingSeconds' => (int) $attempt->timeRemainingSeconds,
+        'status' => $attempt->status,
+    ]);
+}
+
+
+    public function pauseExam(Request $request, int $examId)
+    {
+        $student = $this->getAuthenticatedStudent($request);
+        if (!$student) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+
+        $exam = CbtExam::where('examId', $examId)
+        ->where('schoolId', $student['schoolId'])
+        ->first();
+
+    if (!$exam) {
+        return response()->json(['message' => 'Exam not found'], 404);
+    }
+
+        $attempt = CbtExamAttempt::where('examId', $examId)
+            ->where('studentId', $student['studentId'])
+            ->where('schoolId', $student['schoolId'])
+            ->latest('attemptId')
+            ->first();
+
+        if (!$attempt) {
+            return response()->json(['message' => 'Attempt not found'], 404);
+        }
+
+        if ($response = $this->ensureExamNotForceEnded($exam)) {
+    return $response;
+}
+
+        if ($attempt->status !== 'in_progress') {
+            return response()->json([
+                'message' => 'Attempt is not active',
+                'status' => $attempt->status,
+                'timeRemainingSeconds' => (int) $attempt->timeRemainingSeconds,
+            ]);
+        }
+
+        $now = now();
+
+        if ($attempt->lastHeartbeatAt) {
+            // $elapsed = max(0, $attempt->lastHeartbeatAt->diffInSeconds($now));
+            $elapsed = 0;
+
+            if ($attempt->lastHeartbeatAt) {
+                $elapsed = max(
+                    0,
+                    Carbon::parse($attempt->lastHeartbeatAt)->diffInSeconds($now)
+                );
+            }
+            $attempt->timeRemainingSeconds = max(0, ((int) $attempt->timeRemainingSeconds) - $elapsed);
+        }
+
+        if ($attempt->timeRemainingSeconds <= 0) {
+            $attempt->status = 'expired';
+            $attempt->timeRemainingSeconds = 0;
+        } else {
+            $attempt->status = 'paused';
+            $attempt->pausedAt = $now;
+            $attempt->pauseCount = ((int) $attempt->pauseCount) + 1;
+        }
+
+        $attempt->lastHeartbeatAt = null;
+        $attempt->save();
+
+        return response()->json([
+            'message' => 'Exam paused successfully',
+            'status' => $attempt->status,
+            'timeRemainingSeconds' => (int) $attempt->timeRemainingSeconds,
+        ]);
+    }
+
+
+    public function submit(Request $request, int $examId): JsonResponse
+    {
+        $auth = $this->getAuthenticatedStudent($request);
+        $student = $auth['student'];
+        $studentId = $auth['studentId'];
+        $schoolId = $auth['schoolId'];
+
+        $exam = $this->getExamForStudent($examId, $schoolId, $student);
+
+        $attempt = CbtExamAttempt::where('examId', $exam->examId)
+            ->where('studentId', $studentId)
+            ->where('schoolId', $schoolId)
+            ->where('status', 'in_progress')
+            ->latest('attemptId')
+            ->first();
+
+
+        if (!$attempt) {
+            return response()->json([
+                'message' => 'No active exam attempt found',
+            ], 404);
+        }
+
+        if ($response = $this->ensureExamNotForceEnded($exam)) {
+    return $response;
+}
 
         $this->finalizeAttempt($exam, $attempt);
 
@@ -597,155 +809,401 @@ class StudentCbtController extends Controller
     }
 
 
-   public function submissionSummary(Request $request, int $examId): JsonResponse
-{
-    $auth = $this->getAuthenticatedStudent($request);
-    $student = $auth['student'];
-    $studentId = $auth['studentId'];
-    $schoolId = $auth['schoolId'];
+    public function submissionSummary(Request $request, int $examId): JsonResponse
+    {
+        $auth = $this->getAuthenticatedStudent($request);
+        $student = $auth['student'];
+        $studentId = $auth['studentId'];
+        $schoolId = $auth['schoolId'];
 
-    $exam = $this->getExamForStudent($examId, $schoolId, $student);
+        $exam = $this->getExamForStudent($examId, $schoolId, $student);
 
-    $attempt = CbtExamAttempt::where('examId', $exam->examId)
-        ->where('studentId', $studentId)
-        ->where('schoolId', $schoolId)
-        ->latest('attemptId')
-        ->first();
+        $attempt = CbtExamAttempt::where('examId', $exam->examId)
+            ->where('studentId', $studentId)
+            ->where('schoolId', $schoolId)
+            ->latest('attemptId')
+            ->first();
 
-    if (!$attempt) {
-        return response()->json([
-            'message' => 'Submission summary not found',
-        ], 404);
-    }
+        if (!$attempt) {
+            return response()->json([
+                'message' => 'Submission summary not found',
+            ], 404);
+        }
 
-    $totalQuestions = $exam->sections->sum(function ($section) {
-        return $section->questions->count();
-    });
-
-    $totalObtainableMarks = $exam->sections->sum(function ($section) {
-        return $section->questions->sum(function ($question) {
-            return (float) ($question->mark ?? 1);
+        $totalQuestions = $exam->sections->sum(function ($section) {
+            return $section->questions->count();
         });
-    });
 
-    $percentage = 0;
-    if ($totalObtainableMarks > 0) {
-        $percentage = round(((float) $attempt->score / $totalObtainableMarks) * 100, 2);
+        $totalObtainableMarks = $exam->sections->sum(function ($section) {
+            return $section->questions->sum(function ($question) {
+                return (float) ($question->mark ?? 1);
+            });
+        });
+
+        $percentage = 0;
+        if ($totalObtainableMarks > 0) {
+            $percentage = round(((float) $attempt->score / $totalObtainableMarks) * 100, 2);
+        }
+
+        return response()->json([
+            'message' => 'Submission summary retrieved successfully',
+            'data' => [
+                'examId' => $exam->examId,
+                'title' => $exam->title,
+                'subjectName' => optional($exam->subject)->subjectName,
+                'status' => $attempt->status,
+                'submittedAt' => optional($attempt->submittedAt)->toDateTimeString(),
+                'score' => (float) $attempt->score,
+                'totalQuestions' => (int) $totalQuestions,
+                'answeredQuestions' => (int) $attempt->answeredQuestions,
+                'durationMinutes' => (int) $exam->durationMinutes,
+                'percentage' => $percentage,
+                'canReview' => false,
+            ],
+        ]);
     }
 
-    return response()->json([
-        'message' => 'Submission summary retrieved successfully',
-        'data' => [
-            'examId' => $exam->examId,
-            'title' => $exam->title,
-            'subjectName' => optional($exam->subject)->subjectName,
-            'status' => $attempt->status,
-            'submittedAt' => optional($attempt->submittedAt)->toDateTimeString(),
-            'score' => (float) $attempt->score,
-            'totalQuestions' => (int) $totalQuestions,
-            'answeredQuestions' => (int) $attempt->answeredQuestions,
-            'durationMinutes' => (int) $exam->durationMinutes,
-            'percentage' => $percentage,
-            'canReview' => false,
-        ],
-    ]);
+
+    public function review(Request $request, int $examId): JsonResponse
+    {
+        $auth = $this->getAuthenticatedStudent($request);
+        $student = $auth['student'];
+        $studentId = $auth['studentId'];
+        $schoolId = $auth['schoolId'];
+
+        $exam = $this->getExamForStudent($examId, $schoolId, $student);
+
+        $attempt = CbtExamAttempt::where('examId', $exam->examId)
+            ->where('studentId', $studentId)
+            ->where('schoolId', $schoolId)
+            ->where('status', 'completed')
+            ->latest('attemptId')
+            ->first();
+
+        if (!$attempt) {
+            return response()->json([
+                'message' => 'Review not available for this exam',
+            ], 404);
+        }
+
+        $answers = CbtExamAnswer::where('attemptId', $attempt->attemptId)
+            ->get()
+            ->keyBy('questionId');
+
+        $totalQuestions = $exam->sections->sum(function ($section) {
+            return $section->questions->count();
+        });
+
+        $totalMarks = $exam->sections->sum(function ($section) {
+            return $section->questions->sum(function ($question) {
+                return (float) ($question->mark ?? 1);
+            });
+        });
+
+        $percentage = $totalMarks > 0
+            ? round(((float) $attempt->score / $totalMarks) * 100, 2)
+            : 0;
+
+        return response()->json([
+            'exam' => [
+                'examId' => $exam->examId,
+                'title' => $exam->title,
+                'subjectName' => optional($exam->subject)->subjectName,
+                'durationMinutes' => (int) $exam->durationMinutes,
+                'submittedAt' => optional($attempt->submittedAt)->toDateTimeString(),
+                'score' => (float) $attempt->score,
+                'totalMarks' => (float) $totalMarks,
+                'percentage' => $percentage,
+                'totalQuestions' => (int) $totalQuestions,
+                'answeredQuestions' => (int) $attempt->answeredQuestions,
+            ],
+            'sections' => $exam->sections->map(function ($section) use ($answers) {
+                return [
+                    'sectionId' => $section->sectionId,
+                    'title' => $section->title,
+                    'description' => $section->description,
+                    'instructions' => $section->instructions,
+                    'orderIndex' => (int) $section->orderIndex,
+                    'questions' => $section->questions->map(function ($question) use ($answers) {
+                        $answer = $answers->get($question->questionId);
+
+                        $correctOption = $question->options->first(function ($option) {
+                            return (int) ($option->isCorrect ?? 0) === 1 || $option->isCorrect === true;
+                        });
+
+                        $isAnswered = !is_null($answer?->selectedOptionId) || !is_null($answer?->answerText);
+
+                        return [
+                            'questionId' => $question->questionId,
+                            'questionText' => $question->questionText,
+                            'questionType' => $question->questionType ?? $question->type ?? 'multiple_choice',
+                            'mark' => (float) ($question->mark ?? 1),
+                            'orderIndex' => (int) ($question->orderIndex ?? 0),
+                            'options' => $question->options->map(function ($option) {
+                                return [
+                                    'optionId' => $option->optionId,
+                                    'optionText' => $option->optionText,
+                                    'optionLabel' => $option->optionLabel,
+                                    'isCorrect' => (bool) ($option->isCorrect ?? false),
+                                ];
+                            })->values(),
+                            'selectedOptionId' => $answer?->selectedOptionId,
+                            'answerText' => $answer?->answerText,
+                            'correctOptionId' => $correctOption?->optionId,
+                            'isCorrect' => $answer?->isCorrect,
+                            'scoreAwarded' => (float) ($answer?->scoreAwarded ?? 0),
+                            'isAnswered' => $isAnswered,
+                        ];
+                    })->values(),
+                ];
+            })->values(),
+        ]);
+    }
+
+
+
+    public function resumeSummary(Request $request, int $examId): JsonResponse
+    {
+        try {
+            $auth = $this->getAuthenticatedStudent($request);
+            $studentId = $auth['studentId'];
+            $schoolId = $auth['schoolId'];
+
+            $exam = CbtExam::with([
+                'subject:subjectId,subjectName',
+                'questions',
+            ])
+                ->where('examId', $examId)
+                ->where('schoolId', $schoolId)
+                ->first();
+
+            if (!$exam) {
+                return response()->json([
+                    'message' => 'Exam not found',
+                ], 404);
+            }
+
+            $attempt = CbtExamAttempt::with(['answers'])
+                ->where('examId', $examId)
+                ->where('studentId', $studentId)
+                ->where('schoolId', $schoolId)
+                ->latest('attemptId')
+                ->first();
+
+
+
+                if ($response = $this->ensureExamNotForceEnded($exam)) {
+    return $response;
 }
 
 
-public function review(Request $request, int $examId): JsonResponse
-{
-    $auth = $this->getAuthenticatedStudent($request);
-    $student = $auth['student'];
-    $studentId = $auth['studentId'];
-    $schoolId = $auth['schoolId'];
+                if ($attempt) {
+    $this->autoPauseIfHeartbeatMissing($attempt, 30);
+    $attempt->refresh();
+}
+            if (!$attempt) {
+                return response()->json([
+                    'message' => 'No existing attempt found for this exam',
+                ], 404);
+            }
 
-    $exam = $this->getExamForStudent($examId, $schoolId, $student);
+            if ($attempt->status !== 'completed' && (int) $attempt->timeRemainingSeconds <= 0) {
+                $attempt->update([
+                    'status' => 'expired',
+                    'timeRemainingSeconds' => 0,
+                ]);
 
-    $attempt = CbtExamAttempt::where('examId', $exam->examId)
-        ->where('studentId', $studentId)
-        ->where('schoolId', $schoolId)
-        ->where('status', 'completed')
-        ->latest('attemptId')
-        ->first();
+                $attempt->refresh();
+            }
 
-    if (!$attempt) {
-        return response()->json([
-            'message' => 'Review not available for this exam',
-        ], 404);
+            $totalQuestions = (int) ($attempt->totalQuestions ?: $exam->questions()->count());
+
+            $answers = $attempt->answers ?? collect();
+
+            $answeredCount = $answers->filter(function ($answer) {
+                return !is_null($answer->selectedOptionId) || filled($answer->answerText);
+            })->count();
+
+            $flaggedCount = $answers->filter(function ($answer) {
+                return (bool) $answer->isFlagged;
+            })->count();
+
+            $unansweredCount = max(0, $totalQuestions - $answeredCount);
+
+            return response()->json([
+                'message' => 'Resume summary fetched successfully',
+                'data' => [
+                    'examId' => $exam->examId,
+                    'title' => $exam->title,
+                    'subjectName' => optional($exam->subject)->subjectName,
+                    'durationMinutes' => (int) $exam->durationMinutes,
+                    'totalQuestions' => $totalQuestions,
+                    'answeredCount' => $answeredCount,
+                    'flaggedCount' => $flaggedCount,
+                    'unansweredCount' => $unansweredCount,
+                    'startedAt' => optional($attempt->startedAt)?->toISOString(),
+                    'pausedAt' => optional($attempt->pausedAt)?->toISOString(),
+                    'endsAt' => optional($attempt->endsAt)?->toISOString(),
+                    'timeRemainingSeconds' => (int) $attempt->timeRemainingSeconds,
+                    'status' => $attempt->status,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            \Log::error('Resume summary failed', [
+                'examId' => $examId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Unable to fetch resume summary right now',
+            ], 500);
+        }
     }
 
-    $answers = CbtExamAnswer::where('attemptId', $attempt->attemptId)
-        ->get()
-        ->keyBy('questionId');
 
-    $totalQuestions = $exam->sections->sum(function ($section) {
-        return $section->questions->count();
+
+    protected function autoPauseIfHeartbeatMissing(CbtExamAttempt $attempt, int $graceSeconds = 30): void
+{
+    if ($attempt->status !== 'in_progress') {
+        return;
+    }
+
+    if (!$attempt->lastHeartbeatAt) {
+        return;
+    }
+
+    $now = now();
+    $lastHeartbeatAt = Carbon::parse($attempt->lastHeartbeatAt);
+    $secondsSinceLastHeartbeat = $lastHeartbeatAt->diffInSeconds($now);
+
+    if ($secondsSinceLastHeartbeat < $graceSeconds) {
+        return;
+    }
+
+    $elapsed = max(0, $secondsSinceLastHeartbeat);
+    $remaining = max(0, ((int) $attempt->timeRemainingSeconds) - $elapsed);
+
+    $attempt->timeRemainingSeconds = $remaining;
+
+    if ($remaining <= 0) {
+        $attempt->status = 'expired';
+        $attempt->timeRemainingSeconds = 0;
+    } else {
+        $attempt->status = 'paused';
+        $attempt->pausedAt = $now;
+        $attempt->pauseCount = ((int) $attempt->pauseCount) + 1;
+    }
+
+    $attempt->lastHeartbeatAt = null;
+    $attempt->save();
+}
+
+
+public function forceEndExam(Request $request, int $examId): JsonResponse
+{
+    // $authUser = auth()->user();
+    $schoolId = $request->header('X-School-ID');
+
+    // if (!$authUser) {
+    //     return response()->json([
+    //         'message' => 'Unauthenticated',
+    //     ], 401);
+    // }
+
+    $exam = CbtExam::where('examId', $examId)
+        ->where('schoolId', $schoolId)
+        ->firstOrFail();
+
+    if ($exam->forceEndedAt) {
+        return response()->json([
+            'message' => 'Exam has already been ended.',
+        ], 422);
+    }
+
+    DB::transaction(function () use ($exam) {
+        $exam->update([
+            'forceEndedAt' => now(),
+            'forceEndedBy' => auth()->id(),
+            'forceEndReason' => 'Ended by examiner',
+            'status' => 'ended',
+        ]);
+
+        $attempts = CbtExamAttempt::where('examId', $exam->examId)
+            ->whereIn('status', ['in_progress', 'paused'])
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($attempts as $attempt) {
+            $this->finalizeExamAttempt($attempt, true);
+        }
     });
-
-    $totalMarks = $exam->sections->sum(function ($section) {
-        return $section->questions->sum(function ($question) {
-            return (float) ($question->mark ?? 1);
-        });
-    });
-
-    $percentage = $totalMarks > 0
-        ? round(((float) $attempt->score / $totalMarks) * 100, 2)
-        : 0;
 
     return response()->json([
-        'exam' => [
-            'examId' => $exam->examId,
-            'title' => $exam->title,
-            'subjectName' => optional($exam->subject)->subjectName,
-            'durationMinutes' => (int) $exam->durationMinutes,
-            'submittedAt' => optional($attempt->submittedAt)->toDateTimeString(),
-            'score' => (float) $attempt->score,
-            'totalMarks' => (float) $totalMarks,
-            'percentage' => $percentage,
-            'totalQuestions' => (int) $totalQuestions,
-            'answeredQuestions' => (int) $attempt->answeredQuestions,
-        ],
-        'sections' => $exam->sections->map(function ($section) use ($answers) {
-            return [
-                'sectionId' => $section->sectionId,
-                'title' => $section->title,
-                'description' => $section->description,
-                'instructions' => $section->instructions,
-                'orderIndex' => (int) $section->orderIndex,
-                'questions' => $section->questions->map(function ($question) use ($answers) {
-                    $answer = $answers->get($question->questionId);
-
-                    $correctOption = $question->options->first(function ($option) {
-                        return (int) ($option->isCorrect ?? 0) === 1 || $option->isCorrect === true;
-                    });
-
-                    $isAnswered = !is_null($answer?->selectedOptionId) || !is_null($answer?->answerText);
-
-                    return [
-                        'questionId' => $question->questionId,
-                        'questionText' => $question->questionText,
-                        'questionType' => $question->questionType ?? $question->type ?? 'multiple_choice',
-                        'mark' => (float) ($question->mark ?? 1),
-                        'orderIndex' => (int) ($question->orderIndex ?? 0),
-                        'options' => $question->options->map(function ($option) {
-                            return [
-                                'optionId' => $option->optionId,
-                                'optionText' => $option->optionText,
-                                'optionLabel' => $option->optionLabel,
-                                'isCorrect' => (bool) ($option->isCorrect ?? false),
-                            ];
-                        })->values(),
-                        'selectedOptionId' => $answer?->selectedOptionId,
-                        'answerText' => $answer?->answerText,
-                        'correctOptionId' => $correctOption?->optionId,
-                        'isCorrect' => $answer?->isCorrect,
-                        'scoreAwarded' => (float) ($answer?->scoreAwarded ?? 0),
-                        'isAnswered' => $isAnswered,
-                    ];
-                })->values(),
-            ];
-        })->values(),
+        'message' => 'Exam ended successfully for all candidates.',
     ]);
 }
 
+protected function finalizeExamAttempt(CbtExamAttempt $attempt, bool $forced = false): void
+{
+    if (in_array($attempt->status, ['completed', 'expired'])) {
+        return;
     }
+
+    $attempt->loadMissing([
+        'exam.sections.questions.options',
+        'answers',
+    ]);
+
+    if (!$attempt->exam) {
+        throw new \RuntimeException("Exam relationship not found for attempt {$attempt->attemptId}");
+    }
+
+    $score = 0;
+    $answeredCount = 0;
+
+    $answersByQuestion = $attempt->answers->keyBy('questionId');
+
+    foreach ($attempt->exam->sections as $section) {
+        foreach ($section->questions as $question) {
+            $answer = $answersByQuestion->get($question->questionId);
+
+            if (!$answer || !$answer->selectedOptionId) {
+                continue;
+            }
+
+            $answeredCount++;
+
+            $correctOption = $question->options->firstWhere('isCorrect', true);
+            $questionMark = (float) ($question->mark ?? $question->marks ?? 1);
+
+            if (
+                $correctOption &&
+                (int) $answer->selectedOptionId === (int) $correctOption->optionId
+            ) {
+                $score += $questionMark;
+            }
+        }
+    }
+
+    $attempt->update([
+        'status' => 'completed',
+        'submittedAt' => now(),
+        'score' => $score,
+        'answeredQuestions' => $answeredCount,
+        'timeRemainingSeconds' => 0,
+        'lastHeartbeatAt' => null,
+    ]);
+}
+
+protected function ensureExamNotForceEnded($exam): ?JsonResponse
+{
+    if ($exam->forceEndedAt) {
+        return response()->json([
+            'message' => 'This exam has been ended by the examiner.',
+            'status' => 'force_ended',
+        ], 410);
+    }
+
+    return null;
+}
+}

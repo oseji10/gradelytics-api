@@ -13,7 +13,7 @@ class TermsController extends Controller
     {
         $schoolId = $request->header('X-School-ID');
 
-        $terms = Term::with('academicYear')
+        $terms = Term::with('academic_year')
             ->where('schoolId', $schoolId)
             ->orderBy('termOrder')
             ->get();

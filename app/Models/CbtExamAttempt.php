@@ -26,6 +26,7 @@ class CbtExamAttempt extends Model
         'attemptNumber',
         'status',
         'startedAt',
+        'endsAt',
         'submittedAt',
         'expiresAt',
         'durationMinutes',
@@ -41,6 +42,14 @@ class CbtExamAttempt extends Model
         'submittedBySystem',
         'metadata',
         'examId',
+        'pauseCount',
+        'totalPausedSeconds',
+        'pausedAt',
+        'lastHeartbeatAt',
+        'totalPausedSeconds',
+        'timeRemainingSeconds',
+        'totalQuestions',
+
     ];
 
     protected $casts = [
@@ -53,6 +62,10 @@ class CbtExamAttempt extends Model
         'isTimedOut' => 'boolean',
         'submittedBySystem' => 'boolean',
         'metadata' => 'array',
+         'startedAt' => 'datetime',
+        'endsAt' => 'datetime',
+        'pausedAt' => 'datetime',
+        'lastHeartbeatAt' => 'datetime',
     ];
 
     /*
@@ -63,7 +76,7 @@ class CbtExamAttempt extends Model
 
     public function exam(): BelongsTo
     {
-        return $this->belongsTo(CbtExam::class, 'cbtExamId', 'cbtExamId');
+        return $this->belongsTo(CbtExam::class, 'examId', 'examId');
     }
 
     public function student(): BelongsTo

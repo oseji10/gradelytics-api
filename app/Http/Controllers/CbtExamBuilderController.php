@@ -7,6 +7,7 @@ use App\Models\CbtExam;
 use App\Models\ExamSection;
 use App\Models\ExamSectionQuestion;
 use App\Models\Question;
+use App\Models\CbtQuestion;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;

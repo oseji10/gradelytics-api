@@ -17,8 +17,17 @@ return new class extends Migration
             $table->unsignedBigInteger('studentId');
             $table->unsignedBigInteger('schoolId');
             $table->dateTime('startedAt');
+            $table->dateTime('endsAt')->nullable();
             $table->dateTime('submittedAt')->nullable();
-            $table->string('status'); // in_progress, submitted, timed_out
+            $table->timestamp('pausedAt')->nullable();
+            $table->timestamp('lastHeartbeatAt')->nullable();
+            $table->integer('durationMinutes')->default(0);
+            $table->integer('timeRemainingSeconds')->default(0);
+            $table->integer('totalPausedSeconds')->default(0);
+            $table->integer('pauseCount')->default(0)->nullable();
+
+   
+            $table->enum('status', ['in_progress', 'paused', 'completed', 'expired']); 
             $table->integer('score')->default(0);
             $table->integer('totalQuestions')->default(0);
             $table->decimal('percentage', 5, 2)->default(0.00);

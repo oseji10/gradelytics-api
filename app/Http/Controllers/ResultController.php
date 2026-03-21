@@ -170,17 +170,19 @@ private function computeAndStoreResult(
 
 public function getStudentReportCard(Request $request, int $studentId): JsonResponse
 {
-     $token = $request->cookie('parent_token');
-        if (!$token) {
-            return response()->json(['message' => 'Token missing'], 401);
-        }
+    $token = $request->cookie('parent_token');
+    if (!$token) {
+        return response()->json(['message' => 'Token missing'], 401);
+    }
 
-        JWTAuth::setToken($token);
-        $payload = JWTAuth::getPayload();
-        $parentId = $payload->get('parent_id');
-        $schoolId = $payload->get('school_id');
+    JWTAuth::setToken($token);
+    $payload = JWTAuth::getPayload();
 
-        \Log::info('Decoded JWT Payload', ['payload' => $payload->toArray()]);
+    $parentId = $payload->get('parent_id');
+    $schoolId = $payload->get('school_id');
+
+    \Log::info('Decoded JWT Payload', ['payload' => $payload->toArray()]);
+
     $school = School::where('schoolId', $schoolId)->firstOrFail();
 
     $session = AcademicYear::where('schoolId', $schoolId)
@@ -191,69 +193,60 @@ public function getStudentReportCard(Request $request, int $studentId): JsonResp
         ->where('isActive', true)
         ->firstOrFail();
 
-    // $student = Student::with('classes', 'user')
-    //     ->where('schoolId', $schoolId)
-    //     ->where('studentId', $studentId)
-    //     ->first();
+    $student = Student::with(['classes', 'user', 'house', 'club'])
+        ->where('schoolId', $schoolId)
+        ->where('studentId', $studentId)
+        ->whereHas('parents2', function ($query) use ($parentId) {
+            $query->where('parents.parentId', $parentId);
+        })
+        ->first();
 
-    // if (!$student) {
-    //     return response()->json(['message' => 'Student not found'], 404);
-    // }
+    if (!$student) {
+        return response()->json([
+            'message' => 'Unauthorized access'
+        ], 403);
+    }
 
-    $student = Student::with('classes', 'user')
-    ->where('schoolId', $schoolId)
-    ->where('studentId', $studentId)
-    ->whereHas('parents2', function ($query) use ($parentId) {
-        $query->where('parents.parentId', $parentId);
-    })
-    ->first();
+    $class = $student->classes->first();
 
-if (!$student) {
-    return response()->json([
-        'message' => 'Unauthorized access'
-    ], 403);
+    $classPopulation = 0;
+
+if ($class) {
+    $classPopulation = Student::where('schoolId', $schoolId)
+        ->whereHas('classes', function ($query) use ($class) {
+            $query->where('classes.classId', $class->classId);
+        })
+        ->count();
 }
 
-    // 🔥 Get subject results (final totals already computed)
-    // $results = Result::with('subject')
-    //     ->where('schoolId', $schoolId)
-    //     ->where('studentId', $studentId)
-    //     ->where('academicYearId', $session->academicYearId)
-    //     ->where('termId', $term->termId)
-    //     ->get();
-    $results = Result::with('subject')
-    ->where('schoolId', $schoolId)
-    ->where('academicYearId', $session->academicYearId)
-    ->where('termId', $term->termId)
-    ->whereHas('student', function ($query) use ($parentId, $studentId) {
-        $query->where('studentId', $studentId)
-              ->whereHas('parents2', function ($q) use ($parentId) {
-                  $q->where('parents.parentId', $parentId);
-              });
-    })
-    ->get();
+    $results = Result::with(['subject'])
+        ->where('schoolId', $schoolId)
+        ->where('academicYearId', $session->academicYearId)
+        ->where('termId', $term->termId)
+        ->whereHas('student', function ($query) use ($parentId, $studentId) {
+            $query->where('studentId', $studentId)
+                ->whereHas('parents2', function ($q) use ($parentId) {
+                    $q->where('parents.parentId', $parentId);
+                });
+        })
+        ->get();
 
-        $classTeacherComment = null;
-$principalComment = null;
+    $classTeacherComment = null;
+    $principalComment = null;
 
-if ($results->isNotEmpty()) {
-    $classTeacherComment = $results->first()->classTeacherComment;
-    $principalComment = $results->first()->principalComment;
-}
+    if ($results->isNotEmpty()) {
+        $classTeacherComment = $results->first()->classTeacherComment;
+        $principalComment = $results->first()->principalComment;
+    }
+
+    // School-wide assessments only, as requested
+    $assessments = Assessment::where('schoolId', $schoolId)
+        ->orderBy('assessmentId')
+        ->get();
 
     $subjects = [];
 
     foreach ($results as $result) {
-
-        // 🔥 Get all assessments for this subject
-        $assessments = Assessment::where('schoolId', $schoolId)
-            // ->where('classId', $student->classId)
-            // ->where('subjectId', $result->subjectId)
-            // ->where('academicYearId', $session->academicYearId)
-            // ->where('termId', $term->termId)
-            ->get();
-
-        // 🔥 Get student's assessment scores
         $scores = AssessmentScore::where('schoolId', $schoolId)
             ->where('studentId', $studentId)
             ->where('subjectId', $result->subjectId)
@@ -263,18 +256,27 @@ if ($results->isNotEmpty()) {
             ->keyBy('assessmentId');
 
         $assessmentBreakdown = [];
+        $assessmentTotalWeight = 0;
 
         foreach ($assessments as $assessment) {
-            $assessmentBreakdown[$assessment->assessmentName] =
-                $scores[$assessment->assessmentId]->score ?? 0;
+            $weight = (float) ($assessment->percentageWeight ?? $assessment->weight ?? 0);
+            $assessmentTotalWeight += $weight;
+
+            $assessmentBreakdown[] = [
+                'assessmentId' => (int) $assessment->assessmentId,
+                'name' => (string) ($assessment->assessmentName ?? ''),
+                'score' => isset($scores[$assessment->assessmentId])
+                    ? (float) $scores[$assessment->assessmentId]->score
+                    : 0,
+                'weight' => $weight,
+            ];
         }
 
-        // 🔥 Calculate Subject Position safely
         $rankings = Result::where('schoolId', $schoolId)
-            ->where('classId', $student->classId)
-            ->where('subjectId', $result->subjectId)
             ->where('academicYearId', $session->academicYearId)
             ->where('termId', $term->termId)
+            ->where('subjectId', $result->subjectId)
+            ->where('classId', optional($class)->classId)
             ->orderByDesc('totalScore')
             ->pluck('studentId')
             ->values();
@@ -282,138 +284,154 @@ if ($results->isNotEmpty()) {
         $positionIndex = $rankings->search($studentId);
         $position = $positionIndex !== false ? $this->ordinal($positionIndex + 1) : null;
 
-        $subjects[] = array_merge([
-            // 'subjectName' => $result->class_subject->subject->subjectName ?? null,
+        $classSubjectResults = Result::where('schoolId', $schoolId)
+            ->where('academicYearId', $session->academicYearId)
+            ->where('termId', $term->termId)
+            ->where('subjectId', $result->subjectId)
+            ->where('classId', optional($class)->classId);
+
+        $classMinScore = (float) ($classSubjectResults->min('totalScore') ?? 0);
+        $classMaxScore = (float) ($classSubjectResults->max('totalScore') ?? 0);
+        $classAverageScore = round((float) ($classSubjectResults->avg('totalScore') ?? 0), 2);
+
+        $subjects[] = [
             'subjectName' => $result->subject->subjectName ?? null,
-            'total' => $result->totalScore ?? 0,
+            'assessments' => $assessmentBreakdown,
+            'assessmentTotalWeight' => $assessmentTotalWeight > 0 ? $assessmentTotalWeight : 100,
+            'total' => (float) ($result->totalScore ?? 0),
             'grade' => $result->grade ?? '',
             'position' => $position,
-            'remark' => strtoupper($result->remark ?? '')
-        ], $assessmentBreakdown);
+            'remark' => strtoupper($result->remark ?? ''),
+            'classMinScore' => $classMinScore,
+            'classMaxScore' => $classMaxScore,
+            'classAverageScore' => $classAverageScore,
+        ];
     }
 
+    \Log::info('Report subjects payload', ['subjects' => $subjects]);
+
     $affective = AffectiveScore::with('domain')
-    ->where('schoolId', $schoolId)
-    ->where('studentId', $studentId)
-    ->where('academicYearId', $session->academicYearId)
-    ->where('termId', $term->termId)
-    ->get()
-    ->map(function ($item) {
-        return [
-            'name' => $item->domain->domainName,
-            'rating' => $item->score
-        ];
-    });
+        ->where('schoolId', $schoolId)
+        ->where('studentId', $studentId)
+        ->where('academicYearId', $session->academicYearId)
+        ->where('termId', $term->termId)
+        ->get()
+        ->map(function ($item) {
+            return [
+                'name' => $item->domain->domainName ?? '',
+                'rating' => $item->score
+            ];
+        });
 
     $psychomotor = PsychomotorScore::with('domain')
-    ->where('schoolId', $schoolId)
-    ->where('studentId', $studentId)
-    ->where('academicYearId', $session->academicYearId)
-    ->where('termId', $term->termId)
-    ->get()
-    ->map(function ($item) {
-        return [
-            'name' => $item->domain->domainName,
-            'rating' => $item->score
-        ];
-    });
+        ->where('schoolId', $schoolId)
+        ->where('studentId', $studentId)
+        ->where('academicYearId', $session->academicYearId)
+        ->where('termId', $term->termId)
+        ->get()
+        ->map(function ($item) {
+            return [
+                'name' => $item->domain->domainName ?? '',
+                'rating' => $item->score
+            ];
+        });
 
     $daysOpened = StudentAttendance::where('schoolId', $schoolId)
-    ->where('academicYearId', $session->academicYearId)
-    ->where('termId', $term->termId)
-    ->distinct('attendanceDate')
-    ->count('date');
+        ->where('academicYearId', $session->academicYearId)
+        ->where('termId', $term->termId)
+        ->distinct('attendanceDate')
+        ->count('attendanceDate');
 
     $daysPresent = StudentAttendance::where('schoolId', $schoolId)
-    ->where('academicYearId', $session->academicYearId)
-    ->where('termId', $term->termId)
-    ->where('studentId', $studentId)
-    ->where('status', 'present')
-    ->count();
+        ->where('academicYearId', $session->academicYearId)
+        ->where('termId', $term->termId)
+        ->where('studentId', $studentId)
+        ->where('status', 'present')
+        ->count();
 
     $attendancePercentage = $daysOpened > 0
-    ? round(($daysPresent / $daysOpened) * 100, 2)
-    : 0;
+        ? round(($daysPresent / $daysOpened) * 100, 2)
+        : 0;
 
-$class = $student->classes->first();
+    $classTeacher = null;
+    if ($class) {
+        $classTeacher = ClassTeacher::with('teacher.user')
+            ->where('schoolId', $schoolId)
+            ->where('classId', $class->classId)
+            ->first();
+    }
 
-$classTeacher = null;
+    $classTeacherData = null;
+    if ($classTeacher && $classTeacher->teacher && $classTeacher->teacher->user) {
+        $teacherUser = $classTeacher->teacher->user;
+        $teacher = $classTeacher->teacher;
 
-if ($class) {
-    $classTeacher = ClassTeacher::with('teacher.user')
-        ->where('schoolId', $schoolId)
-        ->where('classId', $class->classId)
-        ->first();
-        // Log::info('teacher'. $classTeacher);
-}
+        $classTeacherData = [
+            'fullName' => strtoupper(
+                trim(
+                    ($teacherUser->lastName ?? '') . ', ' .
+                    ($teacherUser->firstName ?? '') . ' ' .
+                    ($teacherUser->otherNames ?? '')
+                )
+            ),
+            'signature' => $teacher->signature ?? null,
+        ];
+    }
 
-$classTeacherData = null;
+    return response()->json([
+        'school' => [
+            'schoolName' => $school->schoolName,
+            'email' => $school->schoolEmail,
+            'phoneNumber' => $school->schoolPhone,
+            'schoolAddress' => $school->schoolAddress,
+            'schoolLogo' => $school->schoolLogo,
+            'authorizedSignature' => $school->authorizedSignature,
+        ],
 
-if ($classTeacher && $classTeacher->teacher && $classTeacher->teacher->user) {
+        'academicYear' => $session->academicYearName,
+        'term' => $term->termName,
 
-    $teacherUser = $classTeacher->teacher->user;
-    $teacher = $classTeacher->teacher;
-    $classTeacherData = [
         'fullName' => strtoupper(
-            $teacherUser->lastName . ', ' .
-            $teacherUser->firstName . ' ' .
-            $teacherUser->otherNames
+            trim(
+                ($student->user->lastName ?? '') . ', ' .
+                ($student->user->firstName ?? '') . ' ' .
+                ($student->user->otherNames ?? '')
+            )
         ),
-        'signature' => $teacher->signature ?? null,
-    ];
-}
+        'className' => optional($class)->className ?? '',
+        'classPopulation' => $classPopulation,
+        'gender' => strtoupper($student->gender ?? ''),
+        'admissionNo' => $student->admissionNo ?? '',
+        'dob' => $student->dateOfBirth
+            ? Carbon::parse($student->dateOfBirth)->format('D, d-M-Y')
+            : '',
+        'age' => $student->dateOfBirth
+            ? Carbon::parse($student->dateOfBirth)->age
+            : null,
+        'house' => strtoupper($student->house->houseName ?? ''),
+        'club' => strtoupper($student->club->clubName ?? ''),
+        'passportUrl' => $student->passport ?? null,
 
-return response()->json([
+        'subjects' => $subjects,
 
-    // 🔥 SCHOOL DETAILS
-    'school' => [
-        'schoolName'   => $school->schoolName,
-        'email'        => $school->schoolEmail,
-        'phoneNumber'  => $school->schoolPhone,
-        'schoolAddress'=> $school->schoolAddress,
-        'schoolLogo'=> $school->schoolLogo,
-        'authorizedSignature'=> $school->authorizedSignature,
-    ],
+        'comments' => [
+            'classTeacherComment' => $classTeacherComment,
+            'principalComment' => $principalComment,
+        ],
 
-    // 🔥 ACTIVE SESSION + TERM
-    'academicYear' => $session->academicYearName,
-    'term'         => $term->termName,
+        'domains' => [
+            'affective' => $affective,
+            'psychomotor' => $psychomotor,
+        ],
 
-    // 🔥 STUDENT DETAILS
-    'fullName' => strtoupper(
-        $student->user->lastName . ', ' .
-        $student->user->firstName . ' ' .
-        $student->user->otherNames
-    ),
-    'className' => optional($class)->className ?? '',
-    'gender' => strtoupper($student->gender),
-    'admissionNo' => $student->admissionNo ?? '',
-    'dob' => Carbon::parse($student->dateOfBirth)->format('D, d-M-Y'),
-    'age' => Carbon::parse($student->dateOfBirth)->age,
-    'house' => strtoupper($student->house->houseName ?? ''),
-    'club' => strtoupper($student->club->clubName ?? ''),
-    'passportUrl' => $student->passport ?? null,
+        'attendance' => [
+            'timesSchoolOpened' => $daysOpened,
+            'timesPresent' => $daysPresent,
+            'percentage' => $attendancePercentage,
+        ],
 
-    // 🔥 SUBJECT RESULTS
-    'subjects' => $subjects,
-
-    'comments' => [
-        'classTeacherComment' => $classTeacherComment,
-        'principalComment' => $principalComment,
-    ],
-
-    'domains' => [
-        'affective' => $affective,
-        'psychomotor' => $psychomotor
-    ],
-
-    'attendance' => [
-    'timesSchoolOpened' => $daysOpened,
-    'timesPresent' => $daysPresent,
-    'percentage' => $attendancePercentage
-],
-'class_teacher' => $classTeacherData,
-]);
+        'class_teacher' => $classTeacherData,
+    ]);
 }
 
 

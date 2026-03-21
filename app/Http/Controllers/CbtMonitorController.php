@@ -163,6 +163,7 @@ class CbtMonitorController extends Controller
                 'startsAt' => $exam->startsAt ? Carbon::parse($exam->startsAt)->toDateTimeString() : null,
                 'endsAt' => $exam->endsAt ? Carbon::parse($exam->endsAt)->toDateTimeString() : null,
                 'status' => $examStatus,
+                'current_status' => $exam->status,
             ],
             'summary' => [
                 'eligibleCandidates' => $eligibleCandidates,

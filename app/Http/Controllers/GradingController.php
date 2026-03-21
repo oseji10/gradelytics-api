@@ -8,6 +8,7 @@ use App\Models\GradingSystem;
 use App\Models\AcademicYear;
 // use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Tymon\JWTAuth\Facades\JWTAuth;
 class GradingController extends Controller
 {
 
@@ -29,6 +30,33 @@ class GradingController extends Controller
             'grades'   => $grades
         ]);
     }
+
+
+    public function indexForParents(Request $request): JsonResponse
+    {
+         $token = $request->cookie('parent_token');
+    if (!$token) {
+        return response()->json(['message' => 'Token missing'], 401);
+    }
+
+    JWTAuth::setToken($token);
+    $payload = JWTAuth::getPayload();
+
+    $parentId = $payload->get('parent_id');
+    $schoolId = $payload->get('school_id');
+
+        $grades = GradingSystem::where('schoolId', $schoolId)
+                    ->orderBy('minScore', 'desc')
+                    ->get();
+
+        return response()->json([
+            'schoolId' => $schoolId,
+            'grades'   => $grades
+        ]);
+    }
+
+
+    
 
     /**
      * Optionally: Get grade for a specific score

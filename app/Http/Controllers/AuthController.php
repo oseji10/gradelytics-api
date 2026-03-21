@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 use App\Models\User;
-use App\Models\Doctors;
+use App\Models\SchoolStaff;
 use App\Models\Applications;
 use App\Models\ApplicationType;
 use App\Mail\WelcomeEmail;
@@ -423,8 +423,8 @@ public function signin(Request $request)
             'fullName' => 'nullable|string|max:255',
             'phoneNumber' => 'nullable|string|unique:users,phoneNumber|max:14|regex:/^\+?\d{10,15}$/',
             'email' => 'required|email|unique:users,email|max:255',
-            'currencyId' => 'required|integer|exists:currencies,currencyId',
-            'companyName' => 'nullable|string|max:255',
+            // 'currencyId' => 'required|integer|exists:currencies,currencyId',
+            'schoolName' => 'nullable|string|max:255',
             // 'role' => 'required|integer|exists:roles,roleId',
         ]);
 
@@ -474,20 +474,19 @@ $user = User::create([
     // 'company' => $validated['companyName'],
 ]);
 
-        $company = Tenant::create([
-        'tenantName' => $validated['companyName'],
-        'currency' => $validated['currencyId'],
-        'tenantEmail' => $validated['email'],
-        'tenantPhone' => $validated['phoneNumber'],
-        'ownerId' => $user->id,
+        $school = School::create([
+        'schoolName' => $validated['schoolName'],
+        'schoolEmail' => $validated['email'],
+        'schoolPhone' => $validated['phoneNumber'],
+        'addedBy' => $user->id,
         'status' => 'active',
         'isDefault' => 1,
         ]);
 
-        // $companyStaff = CompanyStaff::create([
-        // 'companyId' => $company->companyId,
-        // 'userId' => $user->id
-        // ]);
+        $schoolStaff = SchoolStaff::create([
+        'schoolId' => $school->schoolId,
+        'staffId' => $user->id
+        ]);
 
         Log::info('User created:', ['email' => $user->email]);
 

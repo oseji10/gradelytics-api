@@ -39,4 +39,21 @@ class Teacher extends Model
     );
 }
 
+
+//   public function assignedClass()
+//     {
+//         return $this->belongsTo(SchoolClass::class, 'classId', 'classId');
+//     }
+
+
+      public function assignedClass()
+{
+    return $this->belongsToMany(
+        SchoolStaff::class,
+        'class_teachers',
+        'teacherId',
+        'classId'
+    );
+}
+
 }

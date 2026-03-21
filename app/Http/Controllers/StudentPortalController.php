@@ -356,38 +356,47 @@ public function studentExamStatus(Request $request)
 
         $now = now();
 
-        // Load all published CBT exams for this student's school/class
+        $classId = $student->classes->first()->classId ?? null;
+
         $exams = CbtExam::with(['subject'])
             ->withCount('questions')
             ->where('schoolId', $schoolId)
             ->where('isPublished', true)
-            ->where(function ($query) use ($student) {
+            ->where(function ($query) use ($classId) {
                 $query->whereNull('classId')
-                      ->orWhere('classId', $student->classes->first()->classId);
+                    ->orWhere('classId', $classId);
             })
             ->orderByDesc('examId')
             ->get();
 
-        // Load this student's attempts for these exams
         $attempts = CbtExamAttempt::where('studentId', $studentId)
             ->where('schoolId', $schoolId)
+            ->orderByDesc('attemptId')
             ->get()
+            ->unique('examId')
             ->keyBy('examId');
 
         $availableExams = [];
+        $pausedExams = [];
         $completedExams = [];
         $missedExams = [];
 
         $notStartedCount = 0;
         $inProgressCount = 0;
+        $pausedCount = 0;
         $missedCount = 0;
         $completedCount = 0;
 
         foreach ($exams as $exam) {
             $attempt = $attempts->get($exam->examId);
 
-            $startAt = !empty($exam->startsAt) ? Carbon::parse($exam->startsAt) : null;
-            $endAt = !empty($exam->endsAt) ? Carbon::parse($exam->endsAt) : null;
+            $startAt = !empty($exam->startTime)
+                ? Carbon::parse($exam->startTime)
+                : (!empty($exam->startsAt) ? Carbon::parse($exam->startsAt) : null);
+
+            $endAt = !empty($exam->endTime)
+                ? Carbon::parse($exam->endTime)
+                : (!empty($exam->endsAt) ? Carbon::parse($exam->endsAt) : null);
 
             $hasStarted = $startAt ? $now->greaterThanOrEqualTo($startAt) : true;
             $hasEnded = $endAt ? $now->greaterThan($endAt) : false;
@@ -424,6 +433,29 @@ public function studentExamStatus(Request $request)
                 continue;
             }
 
+            // PAUSED
+            if ($attempt && $attempt->status === 'paused') {
+                $pausedCount++;
+
+                $pausedExams[] = array_merge($examData, [
+                    'attemptId' => $attempt->attemptId,
+                    'status' => 'paused',
+                    'startedAt' => !empty($attempt->startedAt)
+                        ? Carbon::parse($attempt->startedAt)->toDateTimeString()
+                        : (!empty($attempt->started_at)
+                            ? Carbon::parse($attempt->started_at)->toDateTimeString()
+                            : null),
+                    'pausedAt' => !empty($attempt->pausedAt)
+                        ? Carbon::parse($attempt->pausedAt)->toDateTimeString()
+                        : (!empty($attempt->paused_at)
+                            ? Carbon::parse($attempt->paused_at)->toDateTimeString()
+                            : null),
+                    'timeRemainingSeconds' => (int) ($attempt->timeRemainingSeconds ?? 0),
+                ]);
+
+                continue;
+            }
+
             // IN PROGRESS
             if ($attempt && in_array($attempt->status, ['in_progress', 'started'])) {
                 $inProgressCount++;
@@ -436,6 +468,7 @@ public function studentExamStatus(Request $request)
                         : (!empty($attempt->started_at)
                             ? Carbon::parse($attempt->started_at)->toDateTimeString()
                             : null),
+                    'timeRemainingSeconds' => (int) ($attempt->timeRemainingSeconds ?? 0),
                 ]);
 
                 continue;
@@ -452,7 +485,7 @@ public function studentExamStatus(Request $request)
                 continue;
             }
 
-            // AVAILABLE / NOT STARTED
+            // NOT STARTED / AVAILABLE
             if (!$attempt && $isOpenNow) {
                 $notStartedCount++;
 
@@ -462,10 +495,6 @@ public function studentExamStatus(Request $request)
 
                 continue;
             }
-
-            // Optional:
-            // exams not yet open are ignored here.
-            // If you want upcoming exams too, add another bucket.
         }
 
         return response()->json([
@@ -473,10 +502,12 @@ public function studentExamStatus(Request $request)
             'summary' => [
                 'notStartedCount' => $notStartedCount,
                 'inProgressCount' => $inProgressCount,
+                'pausedCount' => $pausedCount,
                 'missedCount' => $missedCount,
                 'completedCount' => $completedCount,
             ],
             'availableExams' => array_values($availableExams),
+            'pausedExams' => array_values($pausedExams),
             'completedExams' => array_values($completedExams),
             'missedExams' => array_values($missedExams),
         ]);
@@ -487,6 +518,5 @@ public function studentExamStatus(Request $request)
         ], 401);
     }
 }
-
 
 }

@@ -38,6 +38,10 @@ class CbtExam extends Model
         'resultComponent',     // ca | exam | custom | none
         'componentMaxScore',   // e.g. 20
         'createdBy',
+        'forceEndedAt',
+        'forceEndedBy',
+        'forceEndReason',
+        'status',
     ];
 
     protected $casts = [

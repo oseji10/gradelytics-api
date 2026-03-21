@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Role;
 use App\Models\Student;
 use App\Models\StudentParent;
-
+use Tymon\JWTAuth\Facades\JWTAuth;
 use App\Models\User;
 use App\Models\StudentParentPivot;
 
@@ -265,6 +265,47 @@ if (!empty($validated['parentId'])) {
         'student' => $student,
     ]);
 }
+
+
+
+    public function logout(Request $request)
+    {
+        try {
+
+            $token = $request->cookie('student_token');
+
+            if ($token) {
+                JWTAuth::setToken($token)->invalidate();
+            }
+
+            return response()->json([
+                'message' => 'Logout successful'
+            ])->cookie(
+                'student_token',
+                '',
+                -1,      // expire immediately
+                '/',
+                null,
+                config('app.env') === 'production',
+                true,
+                false,
+                'Lax'
+            );
+
+        } catch (\Exception $e) {
+
+            return response()->json([
+                'message' => 'Logout failed'
+            ], 500)->cookie(
+                'student_token',
+                '',
+                -1,
+                '/'
+            );
+        }
+    }
 }
+
+
 
 
