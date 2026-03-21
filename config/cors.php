@@ -19,7 +19,7 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['*', 'http://localhost:3000', 'http://localhost:3002', 'https://app.gradelytics.clickbase.tech'],
+    'allowed_origins' => ['*', 'http://localhost:3000', 'http://localhost:3002', 'https://app.gradelytics.com.ng'],
 
     'allowed_origins_patterns' => [],
 

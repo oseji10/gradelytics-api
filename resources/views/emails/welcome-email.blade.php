@@ -13,7 +13,7 @@
 </head>
 <body>
   <div class="container">
-    <img src="https://app.gradelytics.app/images/logo/logo-dark.png" alt="gradelytics Logo" style="max-width: 150px; display: block; margin: 0 auto 10px;">
+    <img src="https://app.gradelytics.com.ng/images/logo/logo-dark.png" alt="G`radelytics Logo" style="max-width: 150px; display: block; margin: 0 auto 10px;">
 
   <div class="content">
     <h2>Welcome to {{ $appName }}, {{ $user->name }}!</h2>
@@ -31,7 +31,7 @@
     <p>Best regards,<br>The {{ $appName }} Team</p>
 
     <div class="footer">
-            <p>&copy; {{ date('Y') }} gradelytics. A product of ClickBase Technologies Limited. All rights reserved.</p>
+            <p>&copy; {{ date('Y') }} Gradelytics. A product of Resilience Nigeria. All rights reserved.</p>
             {{-- <p>Powered by ClickBase Technologies Ltd.</p> --}}
         </div>
   </div>

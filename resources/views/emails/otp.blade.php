@@ -35,10 +35,10 @@
       <tr>
             <td class="footer">
                 <p>
-                    <a href="https://gradelytics.app">gradelytics.app</a> ·
-                    <a href="mailto:info@gradelytics.app">info@gradelytics.app</a>
+                    <a href="https://gradelytics.com.ng">www.gradelytics.com.ng</a> ·
+                    <a href="mailto:info@gradelytics.com.ng">info@gradelytics.com.ng</a>
                 </p>
-                <p>© {{ date('Y') }} gradelytics Ltd.</p>
+                <p>© {{ date('Y') }} Gradelytics</p>
             </td>
         </tr>
 </body>

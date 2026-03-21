@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Verify Your gradelytics Account</title>
+    <title>Verify Your Gradelytics Account</title>
     <style>
         body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -21,7 +21,7 @@
 <body>
     <div class="container">
        <img
-                    src="https://app.gradelytics.app/images/logo/logo.png"
+                    src="https://app.gradelytics.com.ng/images/logo/logo.png"
                     alt="gradelytics"
                     width="140"
                 >
@@ -29,7 +29,7 @@
         <div class="content">
             <h2>Hello {{ $firstName }} {{ $lastName }},</h2>
 
-            <p>Welcome to gradelytics! To complete your registration and verify your email address, please use the following verification code:</p>
+            <p>Welcome to Gradelytics! To complete your registration and verify your email address, please use the following verification code:</p>
 
             <div class="otp-code">
                 {{ $otp }}
@@ -39,16 +39,16 @@
 
             <p>Enter this code in the verification window to activate your account and start generating and sending professional invoices to your clients with gradelytics.</p>
 
-            <p>If you didn't create an account with gradelytics, please ignore this email.</p>
+            <p>If you didn't create an account with Gradelytics, please ignore this email.</p>
         </div>
 
         <tr>
             <td class="footer">
                 <p>
-                    <a href="https://gradelytics.app">gradelytics.app</a> ·
-                    <a href="mailto:info@gradelytics.app">info@gradelytics.app</a>
+                    <a href="https://gradelytics.com.ng">www.gradelytics.com.ng</a> ·
+                    <a href="mailto:info@gradelytics.com.ng">info@gradelytics.com.ng</a>
                 </p>
-                <p>© {{ date('Y') }} gradelytics Ltd.</p>
+                <p>© {{ date('Y') }} Gradelytics</p>
             </td>
         </tr>
     </div>

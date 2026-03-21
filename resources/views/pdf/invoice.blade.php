@@ -282,7 +282,7 @@
 
     @if((int) $current_plan === 1)
     <div class="watermark">
-        <img src="https://app.gradelytics.clickbase.tech/images/logo/logo.svg" alt="gradelytics Logo">
+        <img src="https://app.gradelytics.com.ng/images/logo/logo.svg" alt="gradelytics Logo">
         <div class="watermark-note">Remove this logo for just $2</div>
     </div>
     @endif

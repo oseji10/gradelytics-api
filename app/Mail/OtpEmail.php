@@ -30,7 +30,7 @@ class OtpEmail extends Mailable
      */
     public function build()
     {
-        return $this->subject('Verify Your gradelytics Account')
+        return $this->subject('Verify Your Gradelytics Account')
                     ->view('emails.otp-verification')
                     ->with([
                         'firstName' => $this->firstName,
