@@ -156,7 +156,7 @@ class CbtQuestionController extends Controller
         'questions.*.type'                  => 'required|string|in:single_choice,multi_choice,theory',
         'questions.*.questionText'          => 'required|string|min:3',
         'questions.*.imageUrl'              => 'nullable|string',
-        'questions.*.mark'                  => 'nullable|integer|min:1',
+        'questions.*.mark'                  => 'nullable|decimal|min:1',
         'questions.*.options'               => 'nullable|array|min:2',
         'questions.*.options.*.optionLabel' => 'nullable|string|max:5',
         'questions.*.options.*.optionText'  => 'required_with:questions.*.options|string|min:1',
