@@ -59,6 +59,7 @@ use App\Http\Controllers\AdminDashboardController;
 use App\Http\Controllers\CbtMonitorController;
 
 use App\Http\Controllers\AdminJambController;
+use App\Http\Controllers\CbtQuestionController;
 use App\Http\Controllers\ParentController as ControllersParentController;
 use App\Http\Controllers\StaffController;
 use App\Http\Controllers\StudentJambController;
@@ -289,6 +290,8 @@ Route::patch('/school/current-period', [SchoolsController::class, 'updateCurrent
         Route::patch('/{id}/close', [AcademicYearController::class, 'close']);
     });
 
+
+
     Route::prefix('terms')->group(function () {
         Route::get('/', [TermsController::class, 'index']);
         Route::post('/', [TermsController::class, 'store']);
@@ -515,3 +518,5 @@ Route::get('/parents-list', [ParentController::class, 'index2']);
     Route::get('/result-checker', [ParentPortalController::class, 'resultChecker']);
     Route::get('/results/student/report-card/{studentId}', [ResultController::class, 'getStudentReportCard']);
     });
+
+        Route::post('cbt/questions/bulk', [CbtQuestionController::class, 'bulkStore']);

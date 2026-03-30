@@ -137,6 +137,109 @@ class CbtQuestionController extends Controller
         ], 201);
     }
 
+
+
+    public function bulkStore(Request $request): JsonResponse
+{
+    // $schoolId = $this->schoolId($request);
+    // $userId = (int) $request->user()->id;
+
+    $schoolId =1;
+    $userId =1;
+
+    $validated = $request->validate([
+        'questions'                          => 'required|array|min:1|max:200',
+        'questions.*.subjectId'              => 'required|integer|exists:subjects,subjectId',
+        'questions.*.classId'               => 'nullable|integer|exists:classes,classId',
+        'questions.*.topicId'               => 'nullable|integer|exists:topics,topicId',
+        'questions.*.difficulty'            => 'nullable|string|in:easy,medium,hard',
+        'questions.*.type'                  => 'required|string|in:single_choice,multi_choice,theory',
+        'questions.*.questionText'          => 'required|string|min:3',
+        'questions.*.imageUrl'              => 'nullable|string',
+        'questions.*.mark'                  => 'nullable|integer|min:1',
+        'questions.*.options'               => 'nullable|array|min:2',
+        'questions.*.options.*.optionLabel' => 'nullable|string|max:5',
+        'questions.*.options.*.optionText'  => 'required_with:questions.*.options|string|min:1',
+        'questions.*.options.*.isCorrect'   => 'required_with:questions.*.options|boolean',
+    ]);
+
+    // ── Per-question business rule validation ────────────────────────
+    $businessErrors = [];
+
+    foreach ($validated['questions'] as $index => $q) {
+        $row = $index + 1;
+
+        if (in_array($q['type'], ['single_choice', 'multi_choice'])) {
+            if (empty($q['options']) || count($q['options']) < 2) {
+                $businessErrors[] = "Question {$row}: choice questions must have at least 2 options.";
+                continue;
+            }
+
+            $correctCount = collect($q['options'])->where('isCorrect', true)->count();
+
+            if ($q['type'] === 'single_choice' && $correctCount !== 1) {
+                $businessErrors[] = "Question {$row}: single choice must have exactly 1 correct option.";
+            }
+
+            if ($q['type'] === 'multi_choice' && $correctCount < 1) {
+                $businessErrors[] = "Question {$row}: multi choice must have at least 1 correct option.";
+            }
+        }
+    }
+
+    if (!empty($businessErrors)) {
+        return response()->json([
+            'status'  => 'error',
+            'message' => 'Some questions failed validation.',
+            'errors'  => $businessErrors,
+        ], 422);
+    }
+
+    // ── Insert everything in one transaction ─────────────────────────
+    $created = DB::transaction(function () use ($validated, $schoolId, $userId) {
+        $results = [];
+
+        foreach ($validated['questions'] as $index => $q) {
+            $question = CbtQuestion::create([
+                'schoolId'     => $schoolId,
+                'subjectId'    => (int) $q['subjectId'],
+                'classId'      => $q['classId'] ?? null,
+                'topicId'      => $q['topicId'] ?? null,
+                'difficulty'   => $q['difficulty'] ?? 'medium',
+                'type'         => $q['type'],
+                'questionText' => $q['questionText'],
+                'imageUrl'     => $q['imageUrl'] ?? null,
+                'mark'         => $q['mark'] ?? 1,
+                'createdBy'    => $userId,
+            ]);
+
+            if (!empty($q['options'])) {
+                foreach ($q['options'] as $i => $opt) {
+                    CbtQuestionOption::create([
+                        'questionId'  => $question->questionId,
+                        'optionLabel' => $opt['optionLabel'] ?? chr(65 + $i),
+                        'optionText'  => $opt['optionText'],
+                        'isCorrect'   => (bool) $opt['isCorrect'],
+                    ]);
+                }
+            }
+
+            $results[] = $question->load(['options', 'subject', 'topic']);
+        }
+
+        return $results;
+    });
+
+    return response()->json([
+        'status'  => 'success',
+        'message' => count($created) . ' question(s) uploaded successfully.',
+        'total'   => count($created),
+        'data'    => $created,
+    ], 201);
+}
+
+
+
     public function update(Request $request, int $questionId): JsonResponse
     {
         $schoolId = $this->schoolId($request);
