@@ -519,4 +519,4 @@ Route::get('/parents-list', [ParentController::class, 'index2']);
     Route::get('/results/student/report-card/{studentId}', [ResultController::class, 'getStudentReportCard']);
     });
 
-        Route::post('cbt/questions/bulk', [CbtQuestionController::class, 'bulkStore']);
+    Route::post('cbt/questions/bulk', [CbtQuestionController::class, 'bulkStore']);

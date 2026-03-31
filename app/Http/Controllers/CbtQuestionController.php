@@ -34,7 +34,7 @@ class CbtQuestionController extends Controller
             $q->where('questionText', 'like', "%{$s}%");
         }
 
-        $perPage = (int) $request->query('per_page', 15);
+        $perPage = (int) $request->query('per_page', 100);
 
         return response()->json([
             'status' => 'success',
